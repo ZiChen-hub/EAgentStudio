@@ -37,6 +37,13 @@ from eagent_bridge.cdp import (  # noqa: E402
 from eagent_bridge.proc import kill_tree  # noqa: E402
 from eagent_bridge.http_api import create_app_server  # noqa: E402
 
+# GitHub Actions 的 Windows 控制台默认是 cp1252，直接输出中文会抛 UnicodeEncodeError
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
+
 
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as handle:
