@@ -117,6 +117,21 @@ $env:EAGENT_SIGN_PASSWORD = "证书密码"
 
 签名会作用于 `EAgentStudio.exe` 和最终安装包；时间戳服务可用 `EAGENT_SIGN_TIMESTAMP` 覆盖。没有证书时请去掉 `-Sign`，其余流程不变。
 
+### 未签名安装与校验
+
+当前 GitHub Release 默认是未签名版本，首次运行 Windows 可能提示“未知发布者”：
+
+1. 点击“更多信息”
+2. 点击“仍要运行”
+
+Release 中附带对应的 `.sha256` 校验文件，可用 PowerShell 核对下载是否完整：
+
+```powershell
+Get-FileHash .\EAgentStudio-Setup-<版本>.exe -Algorithm SHA256
+```
+
+如果不想购买证书，可以申请 [SignPath](https://signpath.io/) 的免费开源代码签名，接入步骤见 [docs/signpath.md](docs/signpath.md)。
+
 ## 本地工具插件
 
 在 `<workspace>/.eagent/tools/` 下放 `.py` 文件，任务启动时自动加载：
@@ -151,4 +166,8 @@ python tests/ui_check.py
 - `--keep`：保留临时工作目录和浏览器配置，便于排查
 - `--timeout 180`：界面检查最长执行秒数
 - `--report 目录`：自定义报告输出位置
+
+## 许可证
+
+本项目使用 MIT License，详见 [LICENSE](LICENSE)。
 
