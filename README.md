@@ -67,7 +67,7 @@ eagent_bridge/
 - 请求 Host 必须是回环地址，避免 DNS rebinding
 - 所有文件路径限制在工作目录内，快照回滚也会校验路径
 - 请求体上限 20MB
-- 运行数据（会话、快照、截图、日志）统一放在工作目录的 `.eagent/`，已加入 `.gitignore`
+- 运行数据（会话、快照、截图、日志）统一放在工作目录的 `.eagent/`，首次启动会自动写入 `.eagent/.gitignore`，不会出现在 Git 状态里
 - `/v1` 端点默认关闭跨域访问；设置 `EAGENT_BRIDGE_API_KEY` 后才启用 CORS
 
 ## 环境变量

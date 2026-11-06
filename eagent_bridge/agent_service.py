@@ -22,7 +22,7 @@ from .rules import build_rules
 from .session import Session
 from .snapshots import begin as snapshot_begin, finish as snapshot_finish, list_snapshots
 from .skills import build_instructions
-from .storage import prune as prune_folder
+from .storage import ensure_data_dir, prune as prune_folder
 from .tools import preview_action, safe_path
 from .workspace_service import _load_mcp_servers
 
@@ -63,6 +63,7 @@ class QueuedTask:
 class AppState:
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace.resolve()
+        ensure_data_dir(self.workspace)
         self.session = Session()
         self.term_cwd: Path = self.workspace
         self.runs: dict[str, RunState] = {}

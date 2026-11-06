@@ -12,7 +12,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from support import ROOT  # noqa: E402,F401
 
-from eagent_bridge.storage import prune  # noqa: E402
+from eagent_bridge.storage import ensure_data_dir, prune  # noqa: E402
+
+
+class DataDirTests(unittest.TestCase):
+    def test_creates_gitignore_for_runtime_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            data = ensure_data_dir(workspace)
+
+            self.assertTrue(data.is_dir())
+            self.assertEqual(
+                (data / ".gitignore").read_text(encoding="utf-8").strip(), "*"
+            )
+
+    def test_does_not_overwrite_existing_gitignore(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            data = workspace / ".eagent"
+            data.mkdir()
+            (data / ".gitignore").write_text("custom\n", encoding="utf-8")
+
+            ensure_data_dir(workspace)
+
+            self.assertEqual(
+                (data / ".gitignore").read_text(encoding="utf-8"), "custom\n"
+            )
 
 
 class PruneTests(unittest.TestCase):
