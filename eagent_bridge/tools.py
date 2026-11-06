@@ -21,6 +21,7 @@ from pathlib import Path
 from .gui_tools import GUI_NAMES, GUI_SPECS, GuiError, execute_gui
 from .index import SKIP_DIRS, search_code
 from .memory import save_tool as memory_save
+from .office import read_docx, read_pptx, read_xlsx, write_docx, write_pptx, write_xlsx
 from .proc import kill_tree
 
 MAX_OUTPUT = 3000
@@ -154,6 +155,34 @@ def tool_specs() -> list[dict]:
                     "save_path": {"type": "string", "description": "可选，把响应写入这个相对路径"},
                 },
                 "required": ["url"],
+            },
+        },
+        {
+            "name": "office_document",
+            "description": "读写 Word/Excel/PPT 文档（docx/xlsx/pptx）；写入需要确认",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "format": {"type": "string", "enum": ["docx", "xlsx", "pptx"]},
+                    "action": {"type": "string", "enum": ["read", "write"]},
+                    "path": {"type": "string"},
+                    "blocks": {
+                        "type": "array",
+                        "description": "docx 写入：heading/paragraph/table 块",
+                        "items": {"type": "object"},
+                    },
+                    "sheets": {
+                        "type": "array",
+                        "description": "xlsx 写入：[{name, rows}]",
+                        "items": {"type": "object"},
+                    },
+                    "slides": {
+                        "type": "array",
+                        "description": "pptx 写入：[{title, bullets}]",
+                        "items": {"type": "object"},
+                    },
+                },
+                "required": ["format", "action", "path"],
             },
         },
         {
@@ -566,6 +595,70 @@ def _http_request(workspace: Path, args: dict) -> str:
     return f"HTTP {status} {content_type}\n{text}{suffix}".strip()
 
 
+def _office_document(workspace: Path, args: dict) -> str:
+    file_format = str(args.get("format") or "").lower()
+    action = str(args.get("action") or "").lower()
+    if file_format not in ("docx", "xlsx", "pptx"):
+        raise ToolError("format 只能是 docx / xlsx / pptx")
+    if action not in ("read", "write"):
+        raise ToolError("action 只能是 read / write")
+    raw_path = str(args.get("path") or "").strip()
+    if not raw_path:
+        raise ToolError("path 不能为空")
+    path = _resolve(workspace, raw_path)
+
+    if action == "read":
+        if not path.is_file():
+            raise ToolError(f"文件不存在: {raw_path}")
+        try:
+            if file_format == "docx":
+                text = read_docx(path)
+            elif file_format == "xlsx":
+                sheets = read_xlsx(path)
+                lines = []
+                for sheet in sheets:
+                    lines.append(f"【{sheet['name']}】")
+                    for row in sheet["rows"]:
+                        lines.append("\t".join(str(value) for value in row))
+                text = "\n".join(lines)
+            else:
+                slides = read_pptx(path)
+                text = "\n\n".join(
+                    f"--- 第 {index} 页 ---\n{content}"
+                    for index, content in enumerate(slides, start=1)
+                )
+        except ValueError as error:
+            raise ToolError(str(error)) from error
+        return _truncate(text or "（空文档）")
+
+    if file_format == "docx":
+        blocks = args.get("blocks")
+        if not isinstance(blocks, list):
+            raise ToolError("docx 写入需要 blocks 数组")
+        write_docx(path, blocks)
+        return f"已生成 {path.relative_to(workspace)}（{len(blocks)} 个内容块）"
+    if file_format == "xlsx":
+        sheets = args.get("sheets")
+        if not isinstance(sheets, list):
+            raise ToolError("xlsx 写入需要 sheets 数组")
+        write_xlsx(path, sheets)
+        return f"已生成 {path.relative_to(workspace)}（{len(sheets)} 个工作表）"
+    slides = args.get("slides")
+    if not isinstance(slides, list):
+        raise ToolError("pptx 写入需要 slides 数组")
+    try:
+        write_pptx(path, slides)
+    except ValueError as error:
+        raise ToolError(str(error)) from error
+    return f"已生成 {path.relative_to(workspace)}（{len(slides)} 页）"
+
+
+def _needs_approval(name: str, args: dict) -> bool:
+    if name == "office_document":
+        return str(args.get("action") or "").lower() != "read"
+    return name in _DANGEROUS
+
+
 _HANDLERS = {
     "list_dir": _list_dir,
     "read_file": _read_file,
@@ -576,6 +669,7 @@ _HANDLERS = {
     "find_files": _find_files,
     "batch_files": _batch_files,
     "http_request": _http_request,
+    "office_document": _office_document,
     "save_memory": _save_memory,
     "run_command": _run_command,
 }
@@ -598,6 +692,11 @@ def _approval_detail(name: str, args: dict) -> str:
         )
     if name == "http_request":
         return f"请求：{str(args.get('method') or 'GET').upper()} {args.get('url')}"
+    if name == "office_document":
+        return (
+            f"写入 {str(args.get('format') or '').upper()}：{args.get('path')}\n"
+            f"操作：{args.get('action')}"
+        )
     if name == "write_file":
         content = args.get("content") or ""
         preview = content[:600] + ("..." if len(content) > 600 else "")
@@ -639,7 +738,7 @@ def preview_action(name: str, args: dict, workspace: Path) -> dict:
             "command": args.get("command") or "",
             "cwd": args.get("cwd") or ".",
         }
-    if name in ("batch_files", "http_request"):
+    if name in ("batch_files", "http_request", "office_document"):
         return {"kind": "other", "detail": _approval_detail(name, args)}
     detail = json.dumps(args, ensure_ascii=False)[:600]
     return {"kind": "other", "detail": f"{name}\n{detail}"}
@@ -663,7 +762,7 @@ def execute(
     if handler is None and name not in GUI_NAMES:
         raise ToolError(f"未知工具: {name}")
 
-    if name in _DANGEROUS and name not in READ_ONLY_GUI and not auto_allow:
+    if _needs_approval(name, args) and name not in READ_ONLY_GUI and not auto_allow:
         if approver is None:
             raise ToolError(f"{name} 需要人工确认，但当前没有确认通道")
         if not approver(name, args, workspace):

@@ -30,9 +30,10 @@ python -m eagent_bridge.webui
 ## 主要能力
 
 - Agent 循环：工具调用、计划确认、逐步审批、命令流式输出、停止与任务队列
-- 工具：文件读写/搜索、通配符查找、批量复制移动删除、HTTP 请求与下载、命令执行、测试运行
+- 工具：文件读写/搜索、通配符查找、批量复制移动删除、HTTP 请求与下载、Office 文档、命令执行、测试运行
 - 安全：写文件/执行命令前确认，白名单、只读工具自动放行、任务快照与一键回滚
 - 代码：Monaco 编辑器、文件树、搜索、符号跳转与引用、测试运行器、Git 面板、AI 生成提交信息
+- Office：读写 docx/xlsx（纯标准库，无需安装 Office）；pptx 读取用标准库，写入需要本机安装 PowerPoint
 - 上下文：项目规则、长期记忆、技能、`.eagent` 会话记录、长任务自动压缩
 - 模型：网页 AI / OpenAI 兼容 / Ollama，内置 DeepSeek API、OpenRouter、Gemini、Groq、本地 Ollama 预设
 - 桌面：计算机模式与混合模式（截图、鼠标键盘、窗口、MCP 桌面工具）
