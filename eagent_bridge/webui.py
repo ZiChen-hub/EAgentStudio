@@ -751,9 +751,14 @@ def _submit_run(state: AppState, payload: dict) -> tuple[RunState | None, Queued
     """空闲就直接跑，否则排队。返回 (run, queued)。"""
     if _reserve_slot(state):
         try:
-            return _start_run(state, payload), None
-        finally:
+            run = _start_run(state, payload)
+        except Exception:
+            # 启动失败时释放名额，并让已经排队的任务有机会启动，避免永久卡住
             _release_slot(state)
+            _start_next(state)
+            raise
+        _release_slot(state)
+        return run, None
     with state.queue_lock:
         item = QueuedTask(payload)
         state.queue.append(item)
@@ -766,9 +771,11 @@ def _start_next(state: AppState) -> None:
             return
         state.starting = True
         item = state.queue.pop(0)
+    failed = False
     try:
         _start_run(state, item.payload)
     except Exception as error:  # noqa: BLE001
+        failed = True
         # 启动失败也要让界面看到，否则排队任务会无声消失
         print(f"启动排队任务失败: {error}", file=sys.stderr)
         state.queue_failure = {
@@ -779,6 +786,9 @@ def _start_next(state: AppState) -> None:
         }
     finally:
         _release_slot(state)
+    if failed:
+        # 一个坏任务不能把后面的队列永久堵死
+        _start_next(state)
 
 
 def _start_run(state: AppState, payload: dict) -> RunState:
@@ -1450,7 +1460,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/screenshot":
                 output = execute_gui("screen_capture", {}, self.state.workspace)
-                match = re.search(r"截图已保存：(.+?)（", output)
+                # 贪婪匹配到最后一个全角括号，避免工作目录本身带「（」时截断路径
+                match = re.search(r"截图已保存：(.+)（", output)
                 if not match:
                     raise ValueError(output)
                 target = Path(match.group(1))

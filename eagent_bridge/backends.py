@@ -12,6 +12,7 @@ from .adapters import AdapterError
 from .session import Session
 
 MAX_HISTORY_CHARS = 24000
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
 IMAGE_MIME = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -111,6 +112,8 @@ class OpenAICompatBackend(ChatBackend):
         for raw in list(paths)[:4]:
             path = Path(raw)
             try:
+                if path.stat().st_size > MAX_IMAGE_BYTES:
+                    continue
                 data = path.read_bytes()
             except OSError:
                 continue
@@ -197,6 +200,9 @@ class OpenAICompatBackend(ChatBackend):
         while total > MAX_HISTORY_CHARS and len(self.messages) > 3:
             removed = self.messages.pop(1)
             total -= self._content_size(removed.get("content"))
+        # 裁掉开头可能剩下的 assistant，保证第一条对话是 user（部分接口严格要求）
+        while len(self.messages) > 1 and self.messages[1].get("role") != "user":
+            self.messages.pop(1)
 
     def compact(self, summary: str) -> None:
         system = self.messages[0] if self.messages else {"role": "system", "content": ""}

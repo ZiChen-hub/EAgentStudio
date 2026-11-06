@@ -71,6 +71,34 @@ class HistoryTests(unittest.TestCase):
 
         self.assertLessEqual(len(backend.messages), 3)
 
+    def test_trim_starts_with_user(self):
+        backend = make_backend()
+        backend.messages = [
+            {"role": "system", "content": "rules"},
+            {"role": "user", "content": "u" * 1000},
+            {"role": "assistant", "content": "a" * 4000},
+            {"role": "user", "content": "u2"},
+            {"role": "assistant", "content": "a2"},
+        ]
+
+        with mock.patch("eagent_bridge.backends.MAX_HISTORY_CHARS", 4500):
+            backend._trim()
+
+        self.assertEqual(backend.messages[0]["role"], "system")
+        self.assertEqual(backend.messages[1]["role"], "user")
+
+
+    def test_attach_images_skips_oversized_files(self):
+        backend = make_backend()
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / "big.png"
+            with image.open("wb") as handle:
+                handle.seek(20 * 1024 * 1024 + 1)
+                handle.write(b"x")
+
+            self.assertFalse(backend.attach_images([str(image)]))
+            self.assertEqual(backend._pending_images, [])
+
 
 class _NativeHandler(http.server.BaseHTTPRequestHandler):
     requests: list[dict] = []

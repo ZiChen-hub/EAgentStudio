@@ -346,7 +346,8 @@ class AgentRuntime:
             if name == "run_command":
                 self._emit("command_end", result.split("\n", 1)[0])
             if name == "screen_capture":
-                match = re.search(r"截图已保存：(.+?)（", result)
+                # 贪婪匹配到最后一个全角括号，避免工作目录本身带「（」时截断路径
+                match = re.search(r"截图已保存：(.+)（", result)
                 if match:
                     self._emit("image", self._relative_path(match.group(1)))
             return result

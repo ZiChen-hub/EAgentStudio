@@ -148,6 +148,25 @@ class McpConfigTests(ServerCase, unittest.TestCase):
         self.assertEqual(servers[0]["safeTools"], [])
 
 
+class DesktopBridgeTests(unittest.TestCase):
+    def test_choose_folder_accepts_string_and_list(self):
+        from eagent_bridge.desktop import Bridge
+
+        class Window:
+            def __init__(self, result):
+                self.result = result
+
+            def create_file_dialog(self, *_args):
+                return self.result
+
+        bridge = Bridge()
+        bridge._window = Window("D:\\Work")
+        self.assertEqual(bridge.choose_folder(), "D:\\Work")
+
+        bridge._window = Window(("D:\\Work",))
+        self.assertEqual(bridge.choose_folder(), "D:\\Work")
+
+
 class GitStatusParseTests(unittest.TestCase):
     def test_quoted_paths_are_unquoted(self):
         from eagent_bridge.git_ops import _parse_status
@@ -187,6 +206,30 @@ class QueueTests(ServerCase, unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertIn("队列未清空", data["error"])
         self.assertEqual(self.state.workspace, self.workspace)
+
+    def test_start_failure_releases_slot_and_advances_queue(self):
+        from eagent_bridge.webui import _submit_run
+
+        with mock.patch(
+            "eagent_bridge.webui._start_run", side_effect=RuntimeError("bad config")
+        ), mock.patch("eagent_bridge.webui._start_next") as next_mock:
+            with self.assertRaises(RuntimeError):
+                _submit_run(self.state, {"task": "x"})
+
+        next_mock.assert_called_once_with(self.state)
+        self.assertFalse(self.state.starting)
+
+    def test_one_bad_queued_task_does_not_block_rest(self):
+        self.state.queue.append(QueuedTask({"task": "坏任务"}))
+        self.state.queue.append(QueuedTask({"task": "好任务"}))
+        with mock.patch(
+            "eagent_bridge.webui._start_run",
+            side_effect=[RuntimeError("bad config"), RunState()],
+        ) as start_mock:
+            _start_next(self.state)
+
+        self.assertEqual(start_mock.call_count, 2)
+        self.assertEqual(self.state.queue, [])
 
     def test_failed_queued_task_is_reported(self):
         self.state.queue.append(QueuedTask({"task": "坏任务"}))

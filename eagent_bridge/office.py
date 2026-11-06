@@ -273,8 +273,11 @@ def read_xlsx(path: Path) -> list[dict]:
                             raw = value_node.text if value_node is not None else ""
                             if kind == "s":
                                 try:
-                                    values[index] = shared[int(raw or 0)]
-                                except (ValueError, IndexError):
+                                    position = int(raw or 0)
+                                    values[index] = (
+                                        shared[position] if 0 <= position < len(shared) else ""
+                                    )
+                                except (TypeError, ValueError):
                                     values[index] = ""
                             elif kind == "b":
                                 values[index] = "TRUE" if raw == "1" else "FALSE"

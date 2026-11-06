@@ -46,7 +46,12 @@ class Bridge:
             return ""
         try:
             result = self._window.create_file_dialog(webview.FOLDER_DIALOG)
-            return result[0] if result else ""
+            if not result:
+                return ""
+            # 单选时 pywebview 返回字符串，多选时才返回列表
+            if isinstance(result, (list, tuple)):
+                return str(result[0]) if result else ""
+            return str(result)
         except Exception:
             return ""
 

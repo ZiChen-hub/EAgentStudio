@@ -8,7 +8,13 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from .backends import IMAGE_MIME, MAX_HISTORY_CHARS, BackendError, ChatBackend
+from .backends import (
+    IMAGE_MIME,
+    MAX_HISTORY_CHARS,
+    MAX_IMAGE_BYTES,
+    BackendError,
+    ChatBackend,
+)
 
 
 def _content_length(content) -> int:
@@ -103,6 +109,8 @@ class AnthropicBackend(ChatBackend):
         for raw in list(paths)[:4]:
             path = Path(raw)
             try:
+                if path.stat().st_size > MAX_IMAGE_BYTES:
+                    continue
                 data = path.read_bytes()
             except OSError:
                 continue
@@ -213,6 +221,8 @@ class GeminiBackend(ChatBackend):
         for raw in list(paths)[:4]:
             path = Path(raw)
             try:
+                if path.stat().st_size > MAX_IMAGE_BYTES:
+                    continue
                 data = path.read_bytes()
             except OSError:
                 continue

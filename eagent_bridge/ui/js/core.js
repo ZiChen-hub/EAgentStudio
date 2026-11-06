@@ -47,8 +47,18 @@ function loadSettings() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
     const merged = { ...DEFAULT_SETTINGS, ...stored };
+    if (Array.isArray(merged.models)) {
+      merged.models = merged.models.filter(
+        (model) => model && typeof model === "object" && model.id && model.name
+      );
+    }
     if (!Array.isArray(merged.models) || !merged.models.length) {
       merged.models = BUILTIN_MODELS.slice();
+    }
+    if (!Array.isArray(merged.whitelist)) merged.whitelist = DEFAULT_SETTINGS.whitelist.slice();
+    if (!Array.isArray(merged.enabledSkills)) merged.enabledSkills = [];
+    if (merged.enabledRules !== null && merged.enabledRules !== undefined && !Array.isArray(merged.enabledRules)) {
+      merged.enabledRules = null;
     }
     merged.panels = { ...DEFAULT_SETTINGS.panels, ...(stored.panels || {}) };
     merged.layout = { ...DEFAULT_SETTINGS.layout, ...(stored.layout || {}) };
@@ -71,11 +81,37 @@ let chatSaveTimer = null;
 let replayingChat = false;
 
 function loadChatStore() {
+  let raw;
   try {
-    return JSON.parse(localStorage.getItem(CHATS_KEY) || "{}") || {};
+    raw = JSON.parse(localStorage.getItem(CHATS_KEY) || "{}") || {};
   } catch (error) {
     return {};
   }
+  if (typeof raw !== "object" || Array.isArray(raw)) return {};
+  // 老版本或手改过的 localStorage 可能结构不对，先清洗再使用
+  const store = {};
+  for (const [workspace, book] of Object.entries(raw)) {
+    if (!book || typeof book !== "object") continue;
+    const items = (Array.isArray(book.items) ? book.items : [])
+      .filter((chat) => chat && typeof chat === "object" && Array.isArray(chat.messages))
+      .map((chat) => ({
+        id: String(chat.id || ""),
+        createdAt: Number(chat.createdAt) || 0,
+        updatedAt: Number(chat.updatedAt) || 0,
+        messages: chat.messages
+          .filter((message) => message && typeof message === "object")
+          .map((message) => ({
+            kind: String(message.kind || "assistant"),
+            text: String(message.text == null ? "" : message.text),
+          })),
+      }))
+      .filter((chat) => chat.id);
+    store[workspace] = {
+      activeId: typeof book.activeId === "string" ? book.activeId : "",
+      items,
+    };
+  }
+  return store;
 }
 
 let chatStore = loadChatStore();
