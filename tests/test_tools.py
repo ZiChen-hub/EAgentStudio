@@ -185,6 +185,33 @@ class FileToolsTests(unittest.TestCase):
                 )
             self.assertTrue((workspace / "a.txt").is_file())
 
+    def test_batch_rejects_copy_into_itself(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            (workspace / "src").mkdir()
+            (workspace / "src" / "a.txt").write_text("a", encoding="utf-8")
+            with self.assertRaises(ToolError):
+                execute(
+                    "batch_files",
+                    {"action": "copy", "paths": ["src"], "destination": "src/backup"},
+                    workspace,
+                    auto_allow=True,
+                )
+
+    def test_batch_rejects_eagent_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            internal = workspace / ".eagent"
+            internal.mkdir()
+            (internal / "mcp.json").write_text("{}", encoding="utf-8")
+            with self.assertRaises(ToolError):
+                execute(
+                    "batch_files",
+                    {"action": "delete", "paths": [".eagent/mcp.json"]},
+                    workspace,
+                    auto_allow=True,
+                )
+
 
 class _HttpHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):

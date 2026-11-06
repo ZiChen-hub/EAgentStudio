@@ -10,11 +10,13 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from support import ROOT  # noqa: E402,F401
 
+from eagent_bridge import native_backends as nb  # noqa: E402
 from eagent_bridge.backends import OpenAICompatBackend, build_backend  # noqa: E402
 from eagent_bridge.native_backends import AnthropicBackend, GeminiBackend  # noqa: E402
 from eagent_bridge.session import Session  # noqa: E402
@@ -153,6 +155,32 @@ class NativeBackendTests(unittest.TestCase):
             record["body"]["systemInstruction"]["parts"][0]["text"], "系统"
         )
         self.assertEqual(record["body"]["contents"][0]["parts"][0]["text"], "你好")
+
+
+class TrimTests(unittest.TestCase):
+    def test_anthropic_trim_starts_with_user(self):
+        messages = [
+            {"role": "assistant", "content": "a" * 100},
+            {"role": "user", "content": "u" * 100},
+            {"role": "assistant", "content": "a2" * 100},
+            {"role": "user", "content": "u2" * 100},
+        ]
+        with mock.patch.object(nb, "MAX_HISTORY_CHARS", 50):
+            nb._trim_messages(messages)
+        self.assertTrue(messages)
+        self.assertEqual(messages[0]["role"], "user")
+
+    def test_gemini_trim_starts_with_user(self):
+        contents = [
+            {"role": "model", "parts": [{"text": "a" * 100}]},
+            {"role": "user", "parts": [{"text": "u" * 100}]},
+            {"role": "model", "parts": [{"text": "a2" * 100}]},
+            {"role": "user", "parts": [{"text": "u2" * 100}]},
+        ]
+        with mock.patch.object(nb, "MAX_HISTORY_CHARS", 50):
+            nb._trim_contents(contents)
+        self.assertTrue(contents)
+        self.assertEqual(contents[0]["role"], "user")
 
 
 class BuildBackendTests(unittest.TestCase):

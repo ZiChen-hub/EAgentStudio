@@ -30,6 +30,19 @@ def _trim_messages(messages: list[dict]) -> None:
     while total > MAX_HISTORY_CHARS and len(messages) > 2:
         removed = messages.pop(0)
         total -= _content_length(removed.get("content"))
+    # Anthropic 要求对话从 user 开始，裁掉开头可能剩下的 assistant
+    while messages and messages[0].get("role") == "assistant":
+        messages.pop(0)
+
+
+def _trim_contents(contents: list[dict]) -> None:
+    total = sum(_content_length(message.get("parts")) for message in contents)
+    while total > MAX_HISTORY_CHARS and len(contents) > 2:
+        removed = contents.pop(0)
+        total -= _content_length(removed.get("parts"))
+    # Gemini 同样要求从 user 开始
+    while contents and contents[0].get("role") == "model":
+        contents.pop(0)
 
 
 def _strip_images(messages: list[dict], image_kind: str, text_kind: str = "text") -> None:
@@ -279,10 +292,7 @@ class GeminiBackend(ChatBackend):
                 message["parts"] = [
                     {"text": (text_out + "\n" if text_out else "") + f"（{images} 张图片已省略）"}
                 ]
-        total = sum(_content_length(message.get("parts")) for message in self.contents)
-        while total > MAX_HISTORY_CHARS and len(self.contents) > 2:
-            removed = self.contents.pop(0)
-            total -= _content_length(removed.get("parts"))
+        _trim_contents(self.contents)
         return reply
 
     def compact(self, summary: str) -> None:

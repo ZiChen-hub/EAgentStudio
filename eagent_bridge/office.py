@@ -20,13 +20,34 @@ CONTENT_TYPES = "http://schemas.openxmlformats.org/package/2006/content-types"
 PKG_RELS = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 MAX_READ_CHARS = 60000
+MAX_PART_BYTES = 20 * 1024 * 1024
+MAX_CELLS = 200_000
+_ILLEGAL_XML = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _xml_text(value) -> str:
+    return escape(_ILLEGAL_XML.sub("", str(value)))
+
+
+def _xml_attr(value) -> str:
+    return escape(_ILLEGAL_XML.sub("", str(value)), {'"': "&quot;"})
+
+
+def _read_member(archive: zipfile.ZipFile, name: str) -> bytes:
+    try:
+        info = archive.getinfo(name)
+    except KeyError as error:
+        raise ValueError(f"文档缺少部件: {name}") from error
+    if info.file_size > MAX_PART_BYTES:
+        raise ValueError(f"文档部件过大: {name}")
+    return archive.read(name)
 
 
 def _read_zip_text(path: Path, name: str) -> str:
     try:
         with zipfile.ZipFile(path) as archive:
-            return archive.read(name).decode("utf-8", "replace")
-    except (KeyError, OSError, zipfile.BadZipFile) as error:
+            return _read_member(archive, name).decode("utf-8", "replace")
+    except (OSError, zipfile.BadZipFile) as error:
         raise ValueError(f"无法读取 {path.name}: {error}") from error
 
 
@@ -46,7 +67,7 @@ def _docx_paragraph(text: str, size: int = 22, bold: bool = False) -> str:
         if index:
             runs += "<w:br/>"
         if line:
-            runs += f'<w:t xml:space="preserve">{escape(line)}</w:t>'
+            runs += f'<w:t xml:space="preserve">{_xml_text(line)}</w:t>'
     props = f'<w:rPr>{"<w:b/>" if bold else ""}<w:sz w:val="{size}"/></w:rPr>'
     return (
         f'<w:p><w:pPr><w:spacing w:after="120"/></w:pPr>'
@@ -64,7 +85,7 @@ def _docx_table(rows: list, columns: int) -> str:
             value = row[index] if index < len(row) else ""
             cells += (
                 f'<w:tc><w:tcPr><w:tcW w:w="{width}" w:type="dxa"/></w:tcPr>'
-                f'<w:p><w:r><w:t xml:space="preserve">{escape(str(value))}</w:t></w:r></w:p>'
+                f'<w:p><w:r><w:t xml:space="preserve">{_xml_text(value)}</w:t></w:r></w:p>'
                 "</w:tc>"
             )
         body += f"<w:tr>{cells}</w:tr>"
@@ -124,7 +145,8 @@ def write_docx(path: Path, blocks: list) -> None:
         if kind == "table":
             rows = block.get("rows") if isinstance(block.get("rows"), list) else []
             columns = max((len(row) for row in rows if isinstance(row, list)), default=0)
-            parts.append(_docx_table([row for row in rows if isinstance(row, list)], columns))
+            if columns > 0:
+                parts.append(_docx_table([row for row in rows if isinstance(row, list)], columns))
         elif kind == "heading":
             level = min(max(int(block.get("level") or 1), 1), 4)
             parts.append(_docx_paragraph(str(block.get("text") or ""), size=32 - (level - 1) * 2, bold=True))
@@ -199,19 +221,19 @@ def _cell_xml(row_index: int, column: int, value) -> str:
         return f'<c r="{reference}"><v>{value}</v></c>'
     text = str(value)
     if text.startswith("=") and len(text) > 1:
-        return f'<c r="{reference}"><f>{escape(text[1:])}</f></c>'
-    return f'<c r="{reference}" t="inlineStr"><is><t xml:space="preserve">{escape(text)}</t></is></c>'
+        return f'<c r="{reference}"><f>{_xml_text(text[1:])}</f></c>'
+    return f'<c r="{reference}" t="inlineStr"><is><t xml:space="preserve">{_xml_text(text)}</t></is></c>'
 
 
 def read_xlsx(path: Path) -> list[dict]:
     try:
         with zipfile.ZipFile(path) as archive:
             names = set(archive.namelist())
-            workbook = ET.fromstring(archive.read("xl/workbook.xml"))
-            rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+            workbook = ET.fromstring(_read_member(archive, "xl/workbook.xml"))
+            rels = ET.fromstring(_read_member(archive, "xl/_rels/workbook.xml.rels"))
             shared: list[str] = []
             if "xl/sharedStrings.xml" in names:
-                shared_root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+                shared_root = ET.fromstring(_read_member(archive, "xl/sharedStrings.xml"))
                 for item in shared_root.findall(f"{{{S}}}si"):
                     shared.append("".join(node.text or "" for node in item.iter(f"{{{S}}}t")))
             targets = {
@@ -219,6 +241,7 @@ def read_xlsx(path: Path) -> list[dict]:
                 for element in rels.findall(f"{{{PKG_RELS}}}Relationship")
             }
             sheets = []
+            cells_seen = 0
             for sheet in workbook.findall(f"{{{S}}}sheets/{{{S}}}sheet"):
                 rel_id = sheet.get(f"{{{R}}}id")
                 target = targets.get(rel_id, "")
@@ -227,11 +250,14 @@ def read_xlsx(path: Path) -> list[dict]:
                     member = "xl/" + member
                 if member not in names:
                     continue
-                root = ET.fromstring(archive.read(member))
+                root = ET.fromstring(_read_member(archive, member))
                 rows = []
                 for row in root.findall(f"{{{S}}}sheetData/{{{S}}}row"):
                     values: dict[int, str] = {}
                     for cell in row.findall(f"{{{S}}}c"):
+                        cells_seen += 1
+                        if cells_seen > MAX_CELLS:
+                            raise ValueError("表格单元格过多，已中止读取")
                         index = _column_index(cell.get("r") or "A1")
                         kind = cell.get("t")
                         if kind == "inlineStr":
@@ -273,7 +299,7 @@ def write_xlsx(path: Path, sheets: list) -> None:
         base = name
         suffix = 2
         while name in used_names:
-            name = f"{base[:28]}-{suffix}"
+            name = f"{base[:26]}-{suffix}"[:31]
             suffix += 1
         used_names.add(name)
         rows = sheet.get("rows") if isinstance(sheet.get("rows"), list) else []
@@ -303,7 +329,7 @@ def write_xlsx(path: Path, sheets: list) -> None:
     parts: dict[str, str] = {}
     for index, (name, rows) in enumerate(normalized, start=1):
         sheet_tags.append(
-            f'<sheet name="{escape(name)}" sheetId="{index}" r:id="rId{index}"/>'
+            f'<sheet name="{_xml_attr(name)}" sheetId="{index}" r:id="rId{index}"/>'
         )
         rel_tags.append(
             f'<Relationship Id="rId{index}" Type="{R}/worksheet" '
@@ -366,10 +392,21 @@ def read_pptx(path: Path) -> list[str]:
                     slides.append((int(match.group(1)), name))
             slides.sort()
             results = []
+            total = 0
             for _, name in slides:
-                root = ET.fromstring(archive.read(name))
+                root = ET.fromstring(_read_member(archive, name))
                 texts = [node.text or "" for node in root.iter(f"{{{A}}}t")]
-                results.append("\n".join(text for text in texts if text.strip()))
+                content = "\n".join(text for text in texts if text.strip())
+                remaining = MAX_READ_CHARS - total
+                if remaining <= 0:
+                    results.append("...（内容过长，已截断）")
+                    break
+                if len(content) > remaining:
+                    content = content[:remaining] + "\n...（内容过长，已截断）"
+                results.append(content)
+                total += len(content)
+                if total >= MAX_READ_CHARS:
+                    break
             return results
     except (OSError, zipfile.BadZipFile, ET.ParseError) as error:
         raise ValueError(f"无法读取 pptx: {error}") from error

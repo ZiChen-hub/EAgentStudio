@@ -54,6 +54,30 @@ class McpTemplateTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 install(Path(folder), "nope")
 
+    def test_invalid_existing_config_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            config = workspace / ".eagent" / "mcp.json"
+            config.parent.mkdir(parents=True)
+            config.write_text("not json", encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                install(workspace, "time")
+
+            self.assertEqual(config.read_text(encoding="utf-8"), "not json")
+
+    def test_invalid_mcp_servers_shape_is_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            config = workspace / ".eagent" / "mcp.json"
+            config.parent.mkdir(parents=True)
+            config.write_text('{"mcpServers": []}', encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                install(workspace, "time")
+
+            self.assertEqual(config.read_text(encoding="utf-8"), '{"mcpServers": []}')
+
 
 if __name__ == "__main__":
     unittest.main()

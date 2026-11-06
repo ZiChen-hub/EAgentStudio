@@ -492,6 +492,9 @@ def _batch_files(workspace: Path, args: dict) -> str:
         if not source.exists():
             raise ToolError(f"路径不存在: {raw}")
         sources.append(source)
+    internal = workspace / ".eagent"
+    if any(source == internal or internal in source.parents for source in sources):
+        raise ToolError("不能批量操作 .eagent 内部文件")
 
     if action == "delete":
         try:
@@ -508,8 +511,13 @@ def _batch_files(workspace: Path, args: dict) -> str:
     if not raw_destination:
         raise ToolError("destination 不能为空")
     destination = _resolve(workspace, raw_destination)
+    if destination == internal or internal in destination.parents:
+        raise ToolError("目标目录不能位于 .eagent 内部")
     if destination.exists() and not destination.is_dir():
         raise ToolError("destination 必须是目录")
+    for source in sources:
+        if source.is_dir() and (destination == source or source in destination.parents):
+            raise ToolError(f"目标目录不能位于源目录内部: {source.name}")
     try:
         destination.mkdir(parents=True, exist_ok=True)
     except OSError as error:
@@ -636,13 +644,19 @@ def _office_document(workspace: Path, args: dict) -> str:
         blocks = args.get("blocks")
         if not isinstance(blocks, list):
             raise ToolError("docx 写入需要 blocks 数组")
-        write_docx(path, blocks)
+        try:
+            write_docx(path, blocks)
+        except OSError as error:
+            raise ToolError(f"写入 Office 文档失败：{error}") from error
         return f"已生成 {path.relative_to(workspace)}（{len(blocks)} 个内容块）"
     if file_format == "xlsx":
         sheets = args.get("sheets")
         if not isinstance(sheets, list):
             raise ToolError("xlsx 写入需要 sheets 数组")
-        write_xlsx(path, sheets)
+        try:
+            write_xlsx(path, sheets)
+        except OSError as error:
+            raise ToolError(f"写入 Office 文档失败：{error}") from error
         return f"已生成 {path.relative_to(workspace)}（{len(sheets)} 个工作表）"
     slides = args.get("slides")
     if not isinstance(slides, list):
@@ -651,7 +665,10 @@ def _office_document(workspace: Path, args: dict) -> str:
         write_pptx(path, slides)
     except ValueError as error:
         raise ToolError(str(error)) from error
-    return f"已生成 {path.relative_to(workspace)}（{len(slides)} 页）"
+    except OSError as error:
+        raise ToolError(f"写入 Office 文档失败：{error}") from error
+    count = max(1, len([item for item in slides if isinstance(item, dict)]))
+    return f"已生成 {path.relative_to(workspace)}（{count} 页）"
 
 
 def _needs_approval(name: str, args: dict) -> bool:

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
+
+_LOCK = threading.Lock()
 
 TEMPLATES: list[dict] = [
     {
@@ -77,14 +80,21 @@ def _config_path(workspace: Path) -> Path:
     return workspace / ".eagent" / "mcp.json"
 
 
-def _read(workspace: Path) -> dict:
+def _read(workspace: Path, strict: bool = False) -> dict:
     path = _config_path(workspace)
     if not path.is_file():
         return {"mcpServers": {}}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError) as error:
+        if strict:
+            raise ValueError("现有 MCP 配置不是合法 JSON，请先在设置里修复") from error
         data = {}
+    if strict:
+        if not isinstance(data, dict):
+            raise ValueError("现有 MCP 配置必须是 JSON 对象")
+        if "mcpServers" in data and not isinstance(data.get("mcpServers"), dict):
+            raise ValueError("现有配置里的 mcpServers 必须是对象")
     if not isinstance(data, dict):
         data = {}
     if not isinstance(data.get("mcpServers"), dict):
@@ -119,10 +129,15 @@ def list_templates(workspace: Path) -> list[dict]:
 
 
 def install(workspace: Path, template_id: str) -> dict:
+    with _LOCK:
+        return _install_locked(workspace, template_id)
+
+
+def _install_locked(workspace: Path, template_id: str) -> dict:
     template = next((item for item in TEMPLATES if item["id"] == template_id), None)
     if template is None:
         raise ValueError(f"未知的 MCP 模板: {template_id}")
-    data = _read(workspace)
+    data = _read(workspace, strict=True)
     servers = data["mcpServers"]
     if template_id in servers:
         raise ValueError(f"MCP 服务已存在: {template_id}")

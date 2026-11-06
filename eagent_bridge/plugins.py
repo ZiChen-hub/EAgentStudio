@@ -97,7 +97,7 @@ def load(workspace: Path) -> tuple[list[PluginTool], list[str]]:
                     declared=declared,
                     description=str(spec.get("description") or ""),
                     parameters=parameters,
-                    read_only=bool(getattr(module, "READ_ONLY", False)),
+                    read_only=getattr(module, "READ_ONLY", False) is True,
                     run=runner,
                 )
             )

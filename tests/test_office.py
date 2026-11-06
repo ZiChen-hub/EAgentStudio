@@ -50,6 +50,25 @@ class DocxTests(unittest.TestCase):
             self.assertIn("第一段", text)
             self.assertIn("名称 | 数量", text)
 
+    def test_special_characters_are_safe(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "a.docx"
+            write_docx(
+                path,
+                [{"type": "paragraph", "text": 'A&B <C> "D" \x01'}],
+            )
+
+            text = read_docx(path)
+
+            self.assertIn("A&B <C>", text)
+            self.assertNotIn("\x01", text)
+
+    def test_empty_table_is_skipped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "a.docx"
+            write_docx(path, [{"type": "table", "rows": []}, {"type": "paragraph", "text": "正文"}])
+            self.assertIn("正文", read_docx(path))
+
 
 class XlsxTests(unittest.TestCase):
     def test_roundtrip(self):
@@ -75,6 +94,15 @@ class XlsxTests(unittest.TestCase):
             self.assertEqual(sheets[0]["rows"][0], ["名称", "数量"])
             self.assertEqual(sheets[0]["rows"][1], ["苹果", "3"])
             self.assertEqual(sheets[0]["rows"][2], ["合计", "=SUM(B2:B2)"])
+
+    def test_sheet_name_with_quote(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "a.xlsx"
+            write_xlsx(path, [{"name": 'A"B', "rows": [["x"]]}])
+
+            sheets = read_xlsx(path)
+
+            self.assertEqual(sheets[0]["name"], 'A"B')
 
 
 class OfficeToolTests(unittest.TestCase):
