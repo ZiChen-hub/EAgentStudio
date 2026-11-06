@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eagent-studio"
-version = "0.1.0"
+version = "0.2.0"
 description = "本地桌面编码 Agent：网页版 AI + CDP 驱动，可选 OpenAI 兼容 / Ollama 后端"
 readme = "README.md"
 requires-python = ">=3.10"

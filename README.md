@@ -100,12 +100,22 @@ python -m unittest discover -s tests
 ```powershell
 python -m pip install pyinstaller
 .\build.ps1                 # 生成 dist\EAgentStudio\EAgentStudio.exe
-.\build.ps1 -Installer      # 再生成 dist\installer\EAgentStudio-Setup-0.1.0.exe
+.\build.ps1 -Installer      # 再生成 dist\installer\EAgentStudio-Setup-<版本>.exe
 ```
 
-- 打包配置在 `packaging/eagent.spec`，会自动带上 `eagent_bridge/ui` 下的全部前端资源
+- 打包配置在 `packaging/eagent.spec`，会自动带上 `eagent_bridge/ui` 下的全部前端资源（含内置 Monaco）
 - 安装包配置在 `packaging/eagent.iss`，默认按当前用户安装并创建开始菜单快捷方式
 - `.\build.ps1 -Clean -Installer` 会先清理 `build/` 与 `dist/` 再重新构建
+
+需要签名时（避免 SmartScreen 提示），准备一个 `.pfx` 证书后执行：
+
+```powershell
+$env:EAGENT_SIGN_PFX = "D:\certs\eagent.pfx"
+$env:EAGENT_SIGN_PASSWORD = "证书密码"
+.\build.ps1 -Installer -Sign
+```
+
+签名会作用于 `EAgentStudio.exe` 和最终安装包；时间戳服务可用 `EAGENT_SIGN_TIMESTAMP` 覆盖。没有证书时请去掉 `-Sign`，其余流程不变。
 
 ## 本地工具插件
 

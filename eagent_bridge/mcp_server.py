@@ -6,6 +6,7 @@ import json
 import sys
 import traceback
 
+from . import __version__
 from .adapters import AdapterError
 from .cdp import CDPError
 from .session import Session
@@ -146,7 +147,7 @@ def _dispatch(message: dict, session: Session) -> dict | None:
             "result": {
                 "protocolVersion": params.get("protocolVersion") or PROTOCOL_VERSION,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "eagent-bridge", "version": "0.1.0"},
+                "serverInfo": {"name": "eagent-bridge", "version": __version__},
             },
         }
     if method == "ping":

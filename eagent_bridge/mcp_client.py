@@ -10,6 +10,8 @@ import threading
 import time
 from pathlib import Path
 
+from . import __version__
+
 PROTOCOL_VERSION = "2024-11-05"
 
 
@@ -74,7 +76,7 @@ class MCPClient:
             {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {"name": "eagent-studio", "version": "0.1.0"},
+                "clientInfo": {"name": "eagent-studio", "version": __version__},
             },
             timeout=self.timeout,
         )

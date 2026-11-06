@@ -2,7 +2,7 @@
 ; 先执行 build.ps1 生成 dist\EAgentStudio，再编译本文件。
 
 #define AppName "EAgent Studio"
-#define AppVersion "0.1.0"
+#define AppVersion "0.2.0"
 #define AppExeName "EAgentStudio.exe"
 #define AppPublisher "EAgent"
 
