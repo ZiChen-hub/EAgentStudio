@@ -411,7 +411,7 @@ def _run_command(workspace: Path, args: dict, on_output=None, stop_event=None) -
             elif not truncated:
                 truncated = True
                 lines.append("...（输出过长，后续已省略）\n")
-            if on_output is not None:
+            if on_output is not None and not truncated:
                 try:
                     on_output(line.rstrip("\r\n"))
                 except Exception:

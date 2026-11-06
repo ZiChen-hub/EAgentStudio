@@ -120,7 +120,7 @@ def build_instructions(workspace: Path, skill_ids: list[str]) -> str:
 
 def _slug(workspace: Path, name: str, current_id: str | None = None) -> str:
     base = re.sub(r'[\\/:*?"<>|]+', "-", name).strip().strip(".")
-    base = base or f"skill-{int(time.time())}"
+    base = base[:60] or f"skill-{int(time.time())}"
     candidate = base
     index = 2
     base_dir = skills_dir(workspace)

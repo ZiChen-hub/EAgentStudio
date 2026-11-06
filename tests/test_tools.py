@@ -72,6 +72,22 @@ class ReadFileTests(unittest.TestCase):
                 execute("read_file", {"path": "a.txt", "start_line": 10}, workspace)
 
 
+class CommandOutputTests(unittest.TestCase):
+    def test_stream_stops_after_truncation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            seen: list[str] = []
+            result = execute(
+                "run_command",
+                {"command": "python -c \"for _ in range(3000): print('x'*20)\""},
+                Path(folder),
+                auto_allow=True,
+                on_output=seen.append,
+            )
+
+            self.assertIn("输出过长", result)
+            self.assertLess(len(seen), 1500)
+
+
 class ReplaceTests(unittest.TestCase):
     def test_requires_unique_fragment(self):
         with tempfile.TemporaryDirectory() as folder:

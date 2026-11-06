@@ -1565,8 +1565,14 @@ class Handler(BaseHTTPRequestHandler):
         return bool(self.token) and token == self.token
 
     def _body(self) -> dict:
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError as error:
+            self.close_connection = True
+            raise ValueError("Content-Length 不合法") from error
         if length < 0 or length > MAX_BODY_BYTES:
+            # 不读取超限请求体，保持连接会导致后续请求错位
+            self.close_connection = True
             raise ValueError("请求体过大")
         raw = self.rfile.read(length) if length else b"{}"
         try:

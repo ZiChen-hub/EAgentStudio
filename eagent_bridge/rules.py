@@ -111,6 +111,7 @@ def load_rule(workspace: Path, rule_id: str, scope: str = "project") -> dict:
 
 def _slug(workspace: Path, scope: str, name: str, current_id: str | None = None) -> str:
     base = re.sub(r'[\\/:*?"<>|]+', "-", name).strip().strip(".")
+    base = base[:60]
     if not base.strip("-"):
         base = f"rule-{int(time.time())}"
     candidate = base
