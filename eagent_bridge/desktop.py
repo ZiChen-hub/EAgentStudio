@@ -12,7 +12,7 @@ import sys
 import threading
 from pathlib import Path
 
-from .webui import DEFAULT_PORT, create_app_server
+from .http_api import DEFAULT_PORT, create_app_server
 
 try:
     import webview

@@ -35,7 +35,7 @@ from eagent_bridge.cdp import (  # noqa: E402
     wait_debug_port,
 )
 from eagent_bridge.proc import kill_tree  # noqa: E402
-from eagent_bridge.webui import create_app_server  # noqa: E402
+from eagent_bridge.http_api import create_app_server  # noqa: E402
 
 
 def free_port() -> int:

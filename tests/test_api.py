@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from support import ServerCase  # noqa: E402
 
-from eagent_bridge.webui import QueuedTask, RunState, _load_mcp_servers, _start_next  # noqa: E402
+from eagent_bridge.agent_service import QueuedTask, RunState, _start_next  # noqa: E402
+from eagent_bridge.workspace_service import _load_mcp_servers  # noqa: E402
 
 
 class TerminalTests(ServerCase, unittest.TestCase):
@@ -91,7 +92,7 @@ class McpTemplateTests(ServerCase, unittest.TestCase):
 
 class ModelGuardTests(ServerCase, unittest.TestCase):
     def test_review_skips_while_model_busy(self):
-        from eagent_bridge.webui import _review_changes
+        from eagent_bridge.agent_service import _review_changes
 
         self.state.model_lock.acquire()
         try:
@@ -222,11 +223,11 @@ class QueueTests(ServerCase, unittest.TestCase):
         self.assertEqual(self.state.workspace, self.workspace)
 
     def test_start_failure_releases_slot_and_advances_queue(self):
-        from eagent_bridge.webui import _submit_run
+        from eagent_bridge.agent_service import _submit_run
 
         with mock.patch(
-            "eagent_bridge.webui._start_run", side_effect=RuntimeError("bad config")
-        ), mock.patch("eagent_bridge.webui._start_next") as next_mock:
+            "eagent_bridge.agent_service._start_run", side_effect=RuntimeError("bad config")
+        ), mock.patch("eagent_bridge.agent_service._start_next") as next_mock:
             with self.assertRaises(RuntimeError):
                 _submit_run(self.state, {"task": "x"})
 
@@ -237,7 +238,7 @@ class QueueTests(ServerCase, unittest.TestCase):
         self.state.queue.append(QueuedTask({"task": "坏任务"}))
         self.state.queue.append(QueuedTask({"task": "好任务"}))
         with mock.patch(
-            "eagent_bridge.webui._start_run",
+            "eagent_bridge.agent_service._start_run",
             side_effect=[RuntimeError("bad config"), RunState()],
         ) as start_mock:
             _start_next(self.state)
@@ -248,7 +249,7 @@ class QueueTests(ServerCase, unittest.TestCase):
     def test_failed_queued_task_is_reported(self):
         self.state.queue.append(QueuedTask({"task": "坏任务"}))
         with mock.patch(
-            "eagent_bridge.webui._start_run", side_effect=RuntimeError("bad config")
+            "eagent_bridge.agent_service._start_run", side_effect=RuntimeError("bad config")
         ):
             _start_next(self.state)
 

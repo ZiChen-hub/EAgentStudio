@@ -16,7 +16,7 @@ from support import ServerCase  # noqa: E402
 from eagent_bridge import index  # noqa: E402
 from eagent_bridge.snapshots import restore  # noqa: E402
 from eagent_bridge.tools import ToolError, safe_path  # noqa: E402
-from eagent_bridge.webui import MAX_BODY_BYTES  # noqa: E402
+from eagent_bridge.http_api import MAX_BODY_BYTES  # noqa: E402
 
 
 class AuthTests(ServerCase, unittest.TestCase):

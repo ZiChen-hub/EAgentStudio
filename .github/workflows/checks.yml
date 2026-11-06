@@ -31,3 +31,14 @@ jobs:
             node --check $_.FullName
             if ($LASTEXITCODE -ne 0) { exit 1 }
           }
+
+      - name: 界面自动化检查
+        run: python tests/ui_check.py --timeout 180
+
+      - name: 上传界面测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-report
+          path: .eagent/ui-test
+          if-no-files-found: ignore

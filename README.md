@@ -48,7 +48,10 @@ eagent_bridge/
   backends.py      网页 AI / OpenAI 兼容 / Ollama 后端
   adapters.py      各网页 AI 站点的选择器与收发消息
   session.py       浏览器启动、标签页复用、Cookie 持久化
-  webui.py         本地 HTTP 服务、SSE、所有前端接口
+  http_api.py      本地 HTTP 服务、SSE、所有前端接口
+  agent_service.py 任务状态、审批、队列、会话记录与旁路模型调用
+  workspace_service.py 终端、上传、MCP 配置与文件树/搜索
+  webui.py         浏览器版入口（组装并启动服务）
   ui/index.html    页面结构
   ui/styles.css    界面样式
   ui/js/*.js       按功能拆分的脚本（核心、编辑器、Agent、终端、面板等）
@@ -87,7 +90,21 @@ python -m unittest discover -s tests
 
 装了 pytest 也可以直接 `python -m pytest`。测试覆盖鉴权、Host 校验、路径越界、请求体上限、SSE 续传、终端执行、符号检索、运行时降级/压缩、工具审批与快照回滚，不会启动真实浏览器或调用模型。
 
-推送代码后，GitHub Actions 会在 windows-latest 上执行同样的编译检查、单元测试和前端脚本语法检查（见 `.github/workflows/checks.yml`）。
+推送代码后，GitHub Actions 会在 windows-latest 上执行同样的编译检查、单元测试、前端脚本语法检查和界面自动化检查（见 `.github/workflows/checks.yml`），并上传界面测试报告。
+
+## 打包
+
+需要 Windows、Python 3.10+，并安装 PyInstaller；如果要生成安装程序，再安装 Inno Setup 6。
+
+```powershell
+python -m pip install pyinstaller
+.\build.ps1                 # 生成 dist\EAgentStudio\EAgentStudio.exe
+.\build.ps1 -Installer      # 再生成 dist\installer\EAgentStudio-Setup-0.1.0.exe
+```
+
+- 打包配置在 `packaging/eagent.spec`，会自动带上 `eagent_bridge/ui` 下的全部前端资源
+- 安装包配置在 `packaging/eagent.iss`，默认按当前用户安装并创建开始菜单快捷方式
+- `.\build.ps1 -Clean -Installer` 会先清理 `build/` 与 `dist/` 再重新构建
 
 ## 本地工具插件
 

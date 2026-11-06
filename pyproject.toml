@@ -12,6 +12,7 @@ dependencies = ["pywebview>=4.4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+build = ["pyinstaller>=6.0"]
 
 [project.scripts]
 eagent-studio = "eagent_bridge.desktop:main"
