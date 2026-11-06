@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eagent-studio"
+version = "0.1.0"
+description = "本地桌面编码 Agent：网页版 AI + CDP 驱动，可选 OpenAI 兼容 / Ollama 后端"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pywebview>=4.4"]
+
+[project.optional-dependencies]
+terminal = ["pywinpty>=2.0; sys_platform == 'win32'", "pyte>=0.8"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+eagent-studio = "eagent_bridge.desktop:main"
+eagent-webui = "eagent_bridge.webui:main"
+eagent-openai = "eagent_bridge.server:main"
+eagent-mcp = "eagent_bridge.mcp_server:main"
+
+[tool.setuptools.packages.find]
+include = ["eagent_bridge*"]
+
+[tool.setuptools.package-data]
+eagent_bridge = ["ui/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
