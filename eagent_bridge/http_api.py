@@ -74,6 +74,17 @@ LOG_MAX_BYTES = 2 * 1024 * 1024
 _TOKEN_IN_LOG = re.compile(r"(token=)[^&\s\"]+")
 
 
+def default_workspace() -> Path:
+    """默认工作目录；打包后不要落在安装目录（通常不可写）。"""
+    configured = os.environ.get("EAGENT_BRIDGE_WORKSPACE")
+    if configured:
+        return Path(configured)
+    if getattr(sys, "frozen", False):
+        documents = Path.home() / "Documents"
+        return documents if documents.is_dir() else Path.home()
+    return Path.cwd()
+
+
 def _append_log(workspace: Path, line: str) -> None:
     """把服务端日志落到工作目录，超过 2MB 轮转一次，方便事后排查。"""
     path = workspace / ".eagent" / "logs" / "app.log"

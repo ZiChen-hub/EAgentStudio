@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import os
 import sys
-from pathlib import Path
 
-from .http_api import DEFAULT_PORT, create_app_server, open_app_window
+from .http_api import DEFAULT_PORT, create_app_server, default_workspace, open_app_window
 
 
 def main() -> None:
-    workspace = Path(os.environ.get("EAGENT_BRIDGE_WORKSPACE") or Path.cwd())
+    workspace = default_workspace()
     try:
         server, state = create_app_server(DEFAULT_PORT, workspace)
     except OSError as error:

@@ -10,9 +10,8 @@ import ctypes
 import os
 import sys
 import threading
-from pathlib import Path
 
-from .http_api import DEFAULT_PORT, create_app_server
+from .http_api import DEFAULT_PORT, create_app_server, default_workspace
 
 try:
     import webview
@@ -59,7 +58,7 @@ class Bridge:
 def main() -> None:
     _require_webview()
     port = int(os.environ.get("EAGENT_BRIDGE_WEBUI_PORT", str(DEFAULT_PORT)))
-    workspace = Path(os.environ.get("EAGENT_BRIDGE_WORKSPACE") or Path.cwd())
+    workspace = default_workspace()
 
     try:
         server, state = create_app_server(port, workspace)

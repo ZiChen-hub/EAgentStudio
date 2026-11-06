@@ -33,8 +33,8 @@ Source: "..\dist\EAgentStudio\*"; DestDir: "{app}"; Flags: ignoreversion recurse
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："; Flags: unchecked
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{userdocs}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{userdocs}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "启动 {#AppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "启动 {#AppName}"; WorkingDir: "{userdocs}"; Flags: nowait postinstall skipifsilent
