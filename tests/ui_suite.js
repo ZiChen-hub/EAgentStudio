@@ -289,6 +289,15 @@
       setValue($("modelPreset"), "deepseek");
       assert($("modelFormBase").value.includes("api.deepseek.com"), "Base URL 未填充");
       assert($("modelFormModel").value === "deepseek-chat", "模型名未填充");
+      setValue($("modelPreset"), "claude");
+      assert($("modelFormType").value === "anthropic", "Claude 类型未填充");
+      assert($("modelFormBase").value.includes("anthropic.com"), "Claude Base URL 未填充");
+      setValue($("modelPreset"), "gemini-native");
+      assert($("modelFormType").value === "gemini", "Gemini 原生类型未填充");
+      assert(
+        $("modelFormBase").value.includes("generativelanguage"),
+        "Gemini Base URL 未填充"
+      );
       click($("modelFormCancel"));
       click($("closeSettings"));
     });

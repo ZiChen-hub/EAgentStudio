@@ -230,4 +230,28 @@ def build_backend(config: dict | None, session: Session, on_status=None) -> Chat
             temperature=config.get("temperature"),
         )
 
+    if provider in ("anthropic", "claude"):
+        from .native_backends import AnthropicBackend
+
+        return AnthropicBackend(
+            base_url=str(config.get("baseUrl") or "https://api.anthropic.com"),
+            api_key=str(config.get("apiKey") or ""),
+            model=str(config.get("model") or "claude-sonnet-4-20250514"),
+            temperature=config.get("temperature"),
+            max_tokens=int(config.get("maxTokens") or 4096),
+        )
+
+    if provider in ("gemini", "google"):
+        from .native_backends import GeminiBackend
+
+        return GeminiBackend(
+            base_url=str(
+                config.get("baseUrl") or "https://generativelanguage.googleapis.com/v1beta"
+            ),
+            api_key=str(config.get("apiKey") or ""),
+            model=str(config.get("model") or "gemini-2.0-flash"),
+            temperature=config.get("temperature"),
+            max_tokens=int(config.get("maxTokens") or 4096),
+        )
+
     raise BackendError(f"未知的模型类型: {provider}")

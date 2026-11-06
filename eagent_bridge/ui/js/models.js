@@ -17,6 +17,22 @@ function modelConfigOf(model) {
       model: model.modelName || "llama3",
     };
   }
+  if (model.type === "anthropic") {
+    return {
+      provider: "anthropic",
+      baseUrl: model.baseUrl || "https://api.anthropic.com",
+      apiKey: model.apiKey || "",
+      model: model.modelName || "claude-sonnet-4-20250514",
+    };
+  }
+  if (model.type === "gemini") {
+    return {
+      provider: "gemini",
+      baseUrl: model.baseUrl || "https://generativelanguage.googleapis.com/v1beta",
+      apiKey: model.apiKey || "",
+      model: model.modelName || "gemini-2.0-flash",
+    };
+  }
   return {
     provider: "openai",
     baseUrl: model.baseUrl || "",
@@ -48,6 +64,8 @@ function updateModeChip() {
 function modelDescription(model) {
   if (model.type === "web") return "网页 AI · " + (model.site || "deepseek");
   if (model.type === "ollama") return "Ollama · " + (model.modelName || "llama3");
+  if (model.type === "anthropic") return "Anthropic · " + (model.modelName || "Claude");
+  if (model.type === "gemini") return "Gemini · " + (model.modelName || "gemini-2.0-flash");
   return "OpenAI 兼容 · " + (model.modelName || "未命名模型");
 }
 
@@ -114,6 +132,15 @@ const MODEL_PRESETS = {
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
     modelName: "gemini-2.0-flash",
   },
+  "gemini-native": {
+    name: "Gemini 原生", type: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
+    modelName: "gemini-2.0-flash",
+  },
+  claude: {
+    name: "Claude", type: "anthropic",
+    baseUrl: "https://api.anthropic.com", modelName: "claude-sonnet-4-20250514",
+  },
   groq: {
     name: "Groq", type: "openai",
     baseUrl: "https://api.groq.com/openai/v1", modelName: "llama-3.3-70b-versatile",
@@ -142,6 +169,16 @@ function updateModelFormVisibility() {
   if (type === "ollama") {
     if (!$("modelFormBase").value) $("modelFormBase").value = "http://127.0.0.1:11434/v1";
     if (!$("modelFormModel").value) $("modelFormModel").value = "llama3";
+  }
+  if (type === "anthropic") {
+    if (!$("modelFormBase").value) $("modelFormBase").value = "https://api.anthropic.com";
+    if (!$("modelFormModel").value) $("modelFormModel").value = "claude-sonnet-4-20250514";
+  }
+  if (type === "gemini") {
+    if (!$("modelFormBase").value) {
+      $("modelFormBase").value = "https://generativelanguage.googleapis.com/v1beta";
+    }
+    if (!$("modelFormModel").value) $("modelFormModel").value = "gemini-2.0-flash";
   }
 }
 

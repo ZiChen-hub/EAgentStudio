@@ -35,7 +35,7 @@ python -m eagent_bridge.webui
 - 代码：Monaco 编辑器、文件树、搜索、符号跳转与引用、测试运行器、Git 面板、AI 生成提交信息
 - Office：读写 docx/xlsx（纯标准库，无需安装 Office）；pptx 读取用标准库，写入需要本机安装 PowerPoint
 - 上下文：项目规则、长期记忆、技能、`.eagent` 会话记录、长任务自动压缩
-- 模型：网页 AI / OpenAI 兼容 / Ollama，内置 DeepSeek API、OpenRouter、Gemini、Groq、本地 Ollama 预设
+- 模型：网页 AI / OpenAI 兼容 / Anthropic / Gemini 原生 / Ollama，内置 DeepSeek API、OpenRouter、Gemini、Groq、Claude、本地 Ollama 预设
 - 桌面：计算机模式与混合模式（截图、鼠标键盘、窗口、MCP 桌面工具）
 - MCP：内置 Windows 桌面、文件系统、Git、抓取、时间、Playwright 模板，可在设置里一键写入配置
 
