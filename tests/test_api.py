@@ -165,7 +165,7 @@ class SessionRecordTests(ServerCase, unittest.TestCase):
 
 class DesktopBridgeTests(unittest.TestCase):
     def test_choose_folder_accepts_string_and_list(self):
-        from eagent_bridge.desktop import Bridge
+        from eagent_bridge import desktop
 
         class Window:
             def __init__(self, result):
@@ -174,12 +174,14 @@ class DesktopBridgeTests(unittest.TestCase):
             def create_file_dialog(self, *_args):
                 return self.result
 
-        bridge = Bridge()
-        bridge._window = Window("D:\\Work")
-        self.assertEqual(bridge.choose_folder(), "D:\\Work")
+        # CI 上可能没有安装 pywebview，用桩模块验证纯逻辑
+        with mock.patch.object(desktop, "webview", mock.Mock(FOLDER_DIALOG=1)):
+            bridge = desktop.Bridge()
+            bridge._window = Window("D:\\Work")
+            self.assertEqual(bridge.choose_folder(), "D:\\Work")
 
-        bridge._window = Window(("D:\\Work",))
-        self.assertEqual(bridge.choose_folder(), "D:\\Work")
+            bridge._window = Window(("D:\\Work",))
+            self.assertEqual(bridge.choose_folder(), "D:\\Work")
 
 
 class GitStatusParseTests(unittest.TestCase):
@@ -220,7 +222,7 @@ class QueueTests(ServerCase, unittest.TestCase):
 
         self.assertEqual(status, 409)
         self.assertIn("队列未清空", data["error"])
-        self.assertEqual(self.state.workspace, self.workspace)
+        self.assertEqual(self.state.workspace, self.workspace.resolve())
 
     def test_start_failure_releases_slot_and_advances_queue(self):
         from eagent_bridge.agent_service import _submit_run

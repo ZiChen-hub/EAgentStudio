@@ -232,8 +232,9 @@ def _truncate(text: str) -> str:
 
 
 def safe_path(workspace: Path, raw: str) -> Path:
-    path = (workspace / (raw or ".")).resolve()
-    if path != workspace and workspace not in path.parents:
+    root = workspace.resolve()
+    path = (root / (raw or ".")).resolve()
+    if path != root and root not in path.parents:
         raise ToolError(f"路径越界，只能访问工作目录: {raw}")
     return path
 
@@ -731,6 +732,7 @@ def _approval_detail(name: str, args: dict) -> str:
 
 def preview_action(name: str, args: dict, workspace: Path) -> dict:
     """给界面提供改文件前后的内容，用于渲染 diff。"""
+    workspace = workspace.resolve()
     if name in ("write_file", "replace_in_file"):
         raw = args.get("path") or ""
         try:
@@ -792,6 +794,7 @@ def execute(
 ) -> str:
     if not isinstance(args, dict):
         raise ToolError("args 必须是对象")
+    workspace = workspace.resolve()
 
     plugin = find_plugin(workspace, name)
     handler = _HANDLERS.get(name)

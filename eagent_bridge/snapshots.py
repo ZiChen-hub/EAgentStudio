@@ -195,8 +195,9 @@ def _safe_target(workspace: Path, key: str) -> Path | None:
     candidate = Path(key)
     if candidate.is_absolute() or ".." in candidate.parts:
         return None
-    target = (workspace / candidate).resolve()
-    if target != workspace and workspace not in target.parents:
+    root = workspace.resolve()
+    target = (root / candidate).resolve()
+    if target != root and root not in target.parents:
         return None
     return target
 
