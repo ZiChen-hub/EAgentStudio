@@ -126,6 +126,7 @@ class AppState:
         self.lock = threading.Lock()
         self.queue: list[QueuedTask] = []
         self.queue_lock = threading.Lock()
+        self.queue_failure: dict | None = None
         self.starting = False
 
     def close(self) -> None:
@@ -733,7 +734,14 @@ def _start_next(state: AppState) -> None:
     try:
         _start_run(state, item.payload)
     except Exception as error:  # noqa: BLE001
+        # 启动失败也要让界面看到，否则排队任务会无声消失
         print(f"启动排队任务失败: {error}", file=sys.stderr)
+        state.queue_failure = {
+            "id": item.id,
+            "task": item.task,
+            "message": str(error) or type(error).__name__,
+            "created": time.time(),
+        }
     finally:
         _release_slot(state)
 
@@ -1201,6 +1209,7 @@ class Handler(BaseHTTPRequestHandler):
                             else None
                         ),
                         "items": items,
+                        "failure": self.state.queue_failure,
                     },
                 )
                 return

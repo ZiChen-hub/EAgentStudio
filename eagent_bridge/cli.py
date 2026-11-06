@@ -18,7 +18,7 @@ import sys
 import tempfile
 import time
 
-from .cdp import CDP, Page, create_target, debug_version, find_edge, launch_edge, wait_debug_port
+from .cdp import CDP, Page, create_target, find_edge, launch_edge, wait_debug_port
 from .session import Session
 
 

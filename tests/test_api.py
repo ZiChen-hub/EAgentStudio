@@ -6,12 +6,13 @@ import sys
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from support import ServerCase  # noqa: E402
 
-from eagent_bridge.webui import RunState  # noqa: E402
+from eagent_bridge.webui import QueuedTask, RunState, _start_next  # noqa: E402
 
 
 class TerminalTests(ServerCase, unittest.TestCase):
@@ -85,6 +86,20 @@ class QueueTests(ServerCase, unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["active"]["id"], run.id)
         self.assertEqual(data["active"]["events"], 1)
+
+    def test_failed_queued_task_is_reported(self):
+        self.state.queue.append(QueuedTask({"task": "坏任务"}))
+        with mock.patch(
+            "eagent_bridge.webui._start_run", side_effect=RuntimeError("bad config")
+        ):
+            _start_next(self.state)
+
+        status, data = self.api("POST", "/api/agent/queue", {})
+
+        self.assertEqual(status, 200)
+        self.assertEqual(data["failure"]["task"], "坏任务")
+        self.assertEqual(data["failure"]["message"], "bad config")
+        self.assertEqual(self.state.queue, [])
 
 
 if __name__ == "__main__":

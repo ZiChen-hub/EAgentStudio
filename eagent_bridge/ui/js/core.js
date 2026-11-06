@@ -9,7 +9,7 @@ const state = {
   refItems: [], refIndex: 0, refKind: null, refStart: 0, refSeq: 0,
   skillCache: null, mcpServers: null, ruleCache: null, symbolCache: null, git: null,
   commandBlock: null,
-  queueCard: null, queueTimer: null,
+  queueCard: null, queueTimer: null, lastQueueFailure: null,
   pendingImages: [],
   termCwd: "",
 };

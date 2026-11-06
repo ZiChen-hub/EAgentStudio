@@ -183,6 +183,13 @@ async function checkQueue(silent = false) {
   }
   const items = data.items || [];
   renderQueueCard(items);
+  if (data.failure && data.failure.id !== state.lastQueueFailure) {
+    state.lastQueueFailure = data.failure.id;
+    logMessage(
+      "error",
+      "排队任务启动失败：" + (data.failure.task || "") + "\n" + (data.failure.message || "")
+    );
+  }
   if (!state.source && data.active) {
     const sameRun = data.active.id === state.runId;
     if (!sameRun && !silent) logMessage("user", data.active.task || "（排队任务）");

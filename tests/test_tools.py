@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -83,6 +84,37 @@ class ReplaceTests(unittest.TestCase):
                 auto_allow=True,
             )
             self.assertEqual((workspace / "a.txt").read_text(encoding="utf-8"), "alpha gamma")
+
+
+class ReadOnlyGuiTests(unittest.TestCase):
+    def test_read_only_gui_skips_approval(self):
+        with tempfile.TemporaryDirectory() as folder:
+            calls: list[str] = []
+
+            def approver(name, args, ws):
+                calls.append(name)
+                return False
+
+            with mock.patch("eagent_bridge.tools.execute_gui", return_value="ok"):
+                self.assertEqual(
+                    execute("screen_capture", {}, Path(folder), approver=approver), "ok"
+                )
+                self.assertEqual(
+                    execute("window_list", {}, Path(folder), approver=approver), "ok"
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_mouse_click_still_requires_approval(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch("eagent_bridge.tools.execute_gui", return_value="ok"):
+                with self.assertRaises(ToolError):
+                    execute(
+                        "mouse_click",
+                        {"x": 1, "y": 1},
+                        Path(folder),
+                        approver=lambda *args: False,
+                    )
 
 
 if __name__ == "__main__":

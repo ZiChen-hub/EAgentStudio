@@ -380,6 +380,8 @@ _HANDLERS = {
 }
 
 _DANGEROUS = {"write_file", "replace_in_file", "run_command"} | GUI_NAMES
+# 只读的桌面动作不需要逐次确认，否则电脑模式几乎无法使用
+READ_ONLY_GUI = {"screen_capture", "window_list"}
 
 
 def _approval_detail(name: str, args: dict) -> str:
@@ -448,7 +450,7 @@ def execute(
     if handler is None and name not in GUI_NAMES:
         raise ToolError(f"未知工具: {name}")
 
-    if name in _DANGEROUS and not auto_allow:
+    if name in _DANGEROUS and name not in READ_ONLY_GUI and not auto_allow:
         if approver is None:
             raise ToolError(f"{name} 需要人工确认，但当前没有确认通道")
         if not approver(name, args, workspace):

@@ -123,6 +123,7 @@ class WebModel:
 
     def __init__(self) -> None:
         self.session = Session()
+        self.site = os.environ.get("EAGENT_BRIDGE_V1_SITE", "deepseek")
         self._lock = threading.Lock()
         self._history: list[dict] = []
 
@@ -134,7 +135,7 @@ class WebModel:
         with self._lock:
             delta, is_delta = self._take_delta(normalized)
             prompt = self._build_prompt(delta, tools, is_delta)
-            reply = self.session.ask(prompt, "deepseek", timeout=DEFAULT_TIMEOUT)
+            reply = self.session.ask(prompt, self.site, timeout=DEFAULT_TIMEOUT)
             result = self._parse_reply(reply, tools)
             self._history = normalized + [result["history_entry"]]
             return result

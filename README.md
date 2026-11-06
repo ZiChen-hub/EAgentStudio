@@ -73,6 +73,7 @@ eagent_bridge/
 | `EAGENT_BRIDGE_PORT` | `9222` | Edge 调试端口 |
 | `EAGENT_BRIDGE_PROFILE` | `%LOCALAPPDATA%\EAgentBridge\edge-profile` | 浏览器配置目录 |
 | `EAGENT_BRIDGE_OPENAI_PORT` | `8765` | OpenAI 兼容端点端口 |
+| `EAGENT_BRIDGE_V1_SITE` | `deepseek` | `/v1` 代理使用的网页 AI 站点 |
 | `EAGENT_BRIDGE_API_KEY` | 空 | 设置后 `/v1` 要求 Bearer 校验 |
 
 ## 测试
@@ -81,4 +82,6 @@ eagent_bridge/
 python -m unittest discover -s tests
 ```
 
-装了 pytest 也可以直接 `python -m pytest`。测试覆盖鉴权、Host 校验、路径越界、请求体上限、SSE 续传、终端执行与符号检索，不会启动真实浏览器或调用模型。
+装了 pytest 也可以直接 `python -m pytest`。测试覆盖鉴权、Host 校验、路径越界、请求体上限、SSE 续传、终端执行、符号检索、运行时降级/压缩、工具审批与快照回滚，不会启动真实浏览器或调用模型。
+
+推送代码后，GitHub Actions 会在 windows-latest 上执行同样的编译检查、单元测试和前端脚本语法检查（见 `.github/workflows/checks.yml`）。
