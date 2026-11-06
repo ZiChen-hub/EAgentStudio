@@ -81,6 +81,11 @@ class WebSocket:
 
     def close(self) -> None:
         try:
+            # 连接可能已经卡住，关闭时不要再用长超时等待
+            self._sock.settimeout(1.0)
+        except Exception:
+            pass
+        try:
             self._send_frame(0x8, b"")
         except Exception:
             pass

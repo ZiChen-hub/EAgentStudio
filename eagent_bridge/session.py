@@ -128,6 +128,11 @@ class Session:
         try:
             return self._page.evaluate("1") == 1
         except Exception:
+            # 页面已经不可用，顺手关掉旧连接，避免反复重连时累积 socket
+            try:
+                self._page.cdp.close()
+            except Exception:
+                pass
             self._page = None
             return False
 

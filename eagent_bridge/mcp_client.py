@@ -161,6 +161,8 @@ class MCPClient:
             else:
                 parts.append(json.dumps(item, ensure_ascii=False)[:200])
         text = "\n".join(parts).strip() or "（无输出）"
+        if len(text) > 20000:
+            text = text[:20000] + "\n...（MCP 输出过长，已截断）"
         if result.get("isError"):
             text = "工具返回错误：" + text
         return text

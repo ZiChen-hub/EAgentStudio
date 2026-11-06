@@ -26,6 +26,7 @@ from .plugins import find as find_plugin
 from .proc import kill_tree
 
 MAX_OUTPUT = 3000
+MAX_PREVIEW_CHARS = 2_000_000
 
 
 class ToolError(RuntimeError):
@@ -739,6 +740,11 @@ def preview_action(name: str, args: dict, workspace: Path) -> dict:
         old = ""
         if path.is_file():
             try:
+                if path.stat().st_size > MAX_PREVIEW_CHARS:
+                    return {
+                        "kind": "other",
+                        "detail": f"文件超过 2MB，不在界面展示 diff：{raw}",
+                    }
                 old = path.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 old = ""
@@ -750,6 +756,11 @@ def preview_action(name: str, args: dict, workspace: Path) -> dict:
             new_fragment = args.get("new")
             if isinstance(old_fragment, str) and old_fragment and old.count(old_fragment) == 1:
                 new = old.replace(old_fragment, new_fragment if isinstance(new_fragment, str) else "", 1)
+        if len(new) > MAX_PREVIEW_CHARS:
+            return {
+                "kind": "other",
+                "detail": f"改动内容超过 2MB，不在界面展示 diff：{raw}",
+            }
         return {
             "kind": "write",
             "path": str(path.relative_to(workspace)),

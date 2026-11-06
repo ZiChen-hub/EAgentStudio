@@ -30,6 +30,7 @@ from .session import Session
 MODEL_IDS = ("deepseek-web", "deepseek-web-free")
 DEFAULT_TIMEOUT = float(os.environ.get("EAGENT_BRIDGE_TIMEOUT", "180"))
 MAX_PROMPT_CHARS = 12000
+MAX_BODY_BYTES = 20 * 1024 * 1024
 
 _TOOL_PREAMBLE = """你在扮演一个工具调用规划器。可用工具如下：
 
@@ -280,6 +281,10 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             length = int(self.headers.get("Content-Length") or 0)
+            if length < 0 or length > MAX_BODY_BYTES:
+                self.close_connection = True
+                self._error(413, "request_too_large", "请求体过大")
+                return
             body = json.loads(self.rfile.read(length) or b"{}")
         except (ValueError, json.JSONDecodeError) as error:
             self._error(400, "invalid_request_error", f"请求体不是合法 JSON: {error}")

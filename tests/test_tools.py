@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from support import ROOT  # noqa: E402,F401
 
-from eagent_bridge.tools import ToolError, execute  # noqa: E402
+from eagent_bridge.tools import ToolError, execute, preview_action  # noqa: E402
 
 
 class ApprovalTests(unittest.TestCase):
@@ -70,6 +70,23 @@ class ReadFileTests(unittest.TestCase):
 
             with self.assertRaises(ToolError):
                 execute("read_file", {"path": "a.txt", "start_line": 10}, workspace)
+
+
+class PreviewTests(unittest.TestCase):
+    def test_large_file_skips_diff(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            big = workspace / "big.txt"
+            with big.open("wb") as handle:
+                handle.seek(2_000_001)
+                handle.write(b"x")
+
+            preview = preview_action(
+                "write_file", {"path": "big.txt", "content": "x"}, workspace
+            )
+
+            self.assertEqual(preview["kind"], "other")
+            self.assertIn("2MB", preview["detail"])
 
 
 class CommandOutputTests(unittest.TestCase):
