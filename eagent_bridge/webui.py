@@ -52,6 +52,7 @@ from .memory import (
     load as load_memory,
     save as save_memory_content,
 )
+from .mcp_templates import install as install_mcp_template, list_templates as list_mcp_templates
 from .runtime import AgentRuntime, StopRequested
 from .rules import build_rules, delete_rule, list_rules, load_rule, save_rule
 from .session import Session
@@ -1120,6 +1121,9 @@ class Handler(BaseHTTPRequestHandler):
                 text = path.read_text(encoding="utf-8") if path.is_file() else '{\n  "mcpServers": {}\n}'
                 self._json(200, {"text": text, "servers": _describe_mcp_servers(self.state)})
                 return
+            if parsed.path == "/api/mcp/templates":
+                self._json(200, {"templates": list_mcp_templates(self.state.workspace)})
+                return
             if parsed.path == "/api/skills":
                 self._json(200, {"skills": list_skills(self.state.workspace)})
                 return
@@ -1267,6 +1271,12 @@ class Handler(BaseHTTPRequestHandler):
                 path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
                 servers = data.get("mcpServers") if isinstance(data.get("mcpServers"), dict) else {}
                 self._json(200, {"ok": True, "servers": len(servers)})
+                return
+            if parsed.path == "/api/mcp/install":
+                result = install_mcp_template(
+                    self.state.workspace, str(payload.get("id") or "")
+                )
+                self._json(200, {"ok": True, **result})
                 return
             if parsed.path == "/api/mcp/toggle":
                 name = str(payload.get("name") or "")

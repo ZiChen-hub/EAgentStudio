@@ -280,7 +280,10 @@
         <div class="settings-pane hidden" data-pane="mcp">
           <div class="manage-head">
             <div class="section-title">MCP 服务</div>
-            <button id="addMcp">＋ 添加 / 原始配置</button>
+            <div class="manage-actions">
+              <button id="mcpTemplatesBtn">从模板添加</button>
+              <button id="addMcp">＋ 添加 / 原始配置</button>
+            </div>
           </div>
           <div class="sheet-hint">启用后任务开始时会连接并加载工具；默认调用需确认。</div>
           <div id="mcpList" class="manage-list"></div>
@@ -423,6 +426,17 @@
       <div class="sheet-actions">
         <button id="mcpEditorCancel">取消</button>
         <button id="mcpEditorSave" class="primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mcpTemplates" class="overlay hidden">
+    <div class="sheet wide">
+      <div class="sheet-title">MCP 模板</div>
+      <div class="sheet-hint">一键写入 .eagent/mcp.json；命令依赖 npx 或 uv，安装后在任务开始时连接。</div>
+      <div id="mcpTemplateList" class="manage-list"></div>
+      <div class="sheet-actions">
+        <button id="mcpTemplatesClose">关闭</button>
       </div>
     </div>
   </div>

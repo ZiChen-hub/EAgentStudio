@@ -50,7 +50,7 @@
   const closeAll = async () => {
     for (const id of [
       "settingsModal", "modelEditor", "skillEditor", "ruleEditor", "mcpEditor",
-      "quickOpen", "ctxMenu", "modelMenu", "onboarding", "chatHistoryPop",
+      "mcpTemplates", "quickOpen", "ctxMenu", "modelMenu", "onboarding", "chatHistoryPop",
     ]) {
       const element = $(id);
       if (element) element.classList.add("hidden");
@@ -329,6 +329,21 @@
       assert(!isVisible($("dialog")), "白名单弹窗没有关闭");
       click($("cancelSettings"));
       assert(!isVisible($("settingsModal")), "取消按钮没有关闭设置");
+    });
+
+    await check("MCP 模板面板", async () => {
+      click($("openSettings"));
+      document.querySelector('.sn-item[data-pane="mcp"]').click();
+      click($("mcpTemplatesBtn"));
+      await waitFor(
+        () =>
+          isVisible($("mcpTemplates")) &&
+          document.querySelectorAll("#mcpTemplateList .manage-item").length >= 5,
+        "MCP 模板没有加载"
+      );
+      click($("mcpTemplatesClose"));
+      assert(!isVisible($("mcpTemplates")), "MCP 模板没有关闭");
+      click($("closeSettings"));
     });
 
     await check("记忆保存按钮", async () => {

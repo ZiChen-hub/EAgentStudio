@@ -19,6 +19,7 @@ document.addEventListener("keydown", (event) => {
     $("skillEditor").classList.add("hidden");
     $("ruleEditor").classList.add("hidden");
     $("mcpEditor").classList.add("hidden");
+    $("mcpTemplates").classList.add("hidden");
     $("modelMenu").classList.add("hidden");
     closeRefPopup();
     if (!$("dialog").classList.contains("hidden")) closeDialog(null);

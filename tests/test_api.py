@@ -74,6 +74,20 @@ class ModelCheckTests(ServerCase, unittest.TestCase):
         self.assertFalse(data["ok"])
 
 
+class McpTemplateTests(ServerCase, unittest.TestCase):
+    def test_templates_and_install(self):
+        status, data = self.api("GET", "/api/mcp/templates")
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(len(data["templates"]), 5)
+
+        status, data = self.api("POST", "/api/mcp/install", {"id": "time"})
+        self.assertEqual(status, 200)
+        self.assertEqual(data["name"], "time")
+
+        status, _ = self.api("POST", "/api/mcp/install", {"id": "time"})
+        self.assertEqual(status, 400)
+
+
 class QueueTests(ServerCase, unittest.TestCase):
     def test_reports_active_event_count(self):
         run = RunState()

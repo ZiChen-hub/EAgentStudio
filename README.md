@@ -37,6 +37,7 @@ python -m eagent_bridge.webui
 - 上下文：项目规则、长期记忆、技能、`.eagent` 会话记录、长任务自动压缩
 - 模型：网页 AI / OpenAI 兼容 / Ollama，内置 DeepSeek API、OpenRouter、Gemini、Groq、本地 Ollama 预设
 - 桌面：计算机模式与混合模式（截图、鼠标键盘、窗口、MCP 桌面工具）
+- MCP：内置 Windows 桌面、文件系统、Git、抓取、时间、Playwright 模板，可在设置里一键写入配置
 
 ## 目录结构
 
@@ -115,7 +116,7 @@ def run(args, workspace):
 python tests/ui_check.py
 ```
 
-脚本会新建临时工作目录、启动本地服务，用无头 Edge 打开真实界面，执行 50 项界面检查（布局尺寸、按钮动作、弹窗、主题、缩放、终端、引用、快捷键、引导、异常捕获等）和 12 项服务端副作用检查。报告、截图和请求日志写到 `.eagent/ui-test/<时间>/`。
+脚本会新建临时工作目录、启动本地服务，用无头 Edge 打开真实界面，执行 51 项界面检查（布局尺寸、按钮动作、弹窗、主题、缩放、终端、引用、快捷键、引导、异常捕获等）和 12 项服务端副作用检查。报告、截图和请求日志写到 `.eagent/ui-test/<时间>/`。
 
 常用参数：
 

@@ -536,6 +536,59 @@ async function openMcpEditor() {
   }
 }
 
+async function openMcpTemplates() {
+  try {
+    const data = await api("/api/mcp/templates");
+    const box = $("mcpTemplateList");
+    box.innerHTML = "";
+    for (const item of data.templates) {
+      const row = document.createElement("div");
+      row.className = "manage-item";
+      const icon = document.createElement("div");
+      icon.className = "manage-icon";
+      icon.textContent = item.name.slice(0, 1).toUpperCase();
+      const main = document.createElement("div");
+      main.className = "manage-main";
+      const name = document.createElement("div");
+      name.className = "manage-name";
+      name.textContent = item.name;
+      const desc = document.createElement("div");
+      desc.className = "manage-desc";
+      desc.textContent = item.description + " · 依赖 " + item.requires;
+      main.append(name, desc);
+      const actions = document.createElement("div");
+      actions.className = "manage-actions";
+      const add = document.createElement("button");
+      add.className = "mini-btn";
+      add.textContent = item.installed ? "已安装" : "添加";
+      add.disabled = !!item.installed;
+      add.addEventListener("click", () => installMcpTemplate(item.id));
+      actions.appendChild(add);
+      row.append(icon, main, actions);
+      box.appendChild(row);
+    }
+    $("mcpTemplates").classList.remove("hidden");
+  } catch (error) {
+    logMessage("error", error.message);
+  }
+}
+
+async function installMcpTemplate(id) {
+  try {
+    const data = await api("/api/mcp/install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    logMessage("status", "已安装 MCP 模板：" + data.name);
+    state.mcpServers = null;
+    await loadMcp();
+    await openMcpTemplates();
+  } catch (error) {
+    logMessage("error", error.message);
+  }
+}
+
 async function saveMcpEditor() {
   try {
     const result = await api("/api/mcp", {
@@ -553,6 +606,8 @@ async function saveMcpEditor() {
 }
 
 $("addMcp").addEventListener("click", openMcpEditor);
+$("mcpTemplatesBtn").addEventListener("click", openMcpTemplates);
+$("mcpTemplatesClose").addEventListener("click", () => $("mcpTemplates").classList.add("hidden"));
 $("mcpEditorCancel").addEventListener("click", () => $("mcpEditor").classList.add("hidden"));
 $("mcpEditorSave").addEventListener("click", saveMcpEditor);
 
