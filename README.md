@@ -85,3 +85,18 @@ python -m unittest discover -s tests
 装了 pytest 也可以直接 `python -m pytest`。测试覆盖鉴权、Host 校验、路径越界、请求体上限、SSE 续传、终端执行、符号检索、运行时降级/压缩、工具审批与快照回滚，不会启动真实浏览器或调用模型。
 
 推送代码后，GitHub Actions 会在 windows-latest 上执行同样的编译检查、单元测试和前端脚本语法检查（见 `.github/workflows/checks.yml`）。
+
+## 界面自动化检查
+
+```powershell
+python tests/ui_check.py
+```
+
+脚本会新建临时工作目录、启动本地服务，用无头 Edge 打开真实界面，执行 49 项界面检查（布局尺寸、按钮动作、弹窗、主题、缩放、终端、引用、快捷键、引导、异常捕获等）和 12 项服务端副作用检查。报告、截图和请求日志写到 `.eagent/ui-test/<时间>/`。
+
+常用参数：
+
+- `--keep`：保留临时工作目录和浏览器配置，便于排查
+- `--timeout 180`：界面检查最长执行秒数
+- `--report 目录`：自定义报告输出位置
+

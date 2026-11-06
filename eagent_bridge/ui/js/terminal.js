@@ -105,10 +105,11 @@ $("termClear").addEventListener("click", (event) => {
 
 $("termCopy").addEventListener("click", async (event) => {
   event.stopPropagation();
+  // 必须在 await 之前取 currentTarget：异步回来后它会被浏览器置空
+  const button = event.currentTarget;
   const text = $("termOut").textContent || "";
   if (!text.trim()) return;
   await copyText(text);
-  const button = event.currentTarget;
   button.textContent = "已复制";
   setTimeout(() => { button.textContent = "复制"; }, 1200);
 });

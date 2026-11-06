@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
   agentMode: "code",
   enabledSkills: [],
   enabledRules: null,
-  panels: { sidebar: false, chat: false, terminal: false },
+  panels: { sidebar: true, chat: true, terminal: true },
   layout: { sidebar: 250, chat: 372, terminal: 210 },
   guided: false,
   zoom: 1,
