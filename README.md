@@ -88,6 +88,27 @@ python -m unittest discover -s tests
 
 推送代码后，GitHub Actions 会在 windows-latest 上执行同样的编译检查、单元测试和前端脚本语法检查（见 `.github/workflows/checks.yml`）。
 
+## 本地工具插件
+
+在 `<workspace>/.eagent/tools/` 下放 `.py` 文件，任务启动时自动加载：
+
+```python
+TOOL_SPEC = {
+    "name": "word_count",
+    "description": "统计文本字数",
+    "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+}
+READ_ONLY = True   # 只读插件自动放行；不写则默认执行前需要确认
+
+def run(args, workspace):
+    text = (workspace / args["path"]).read_text(encoding="utf-8")
+    return f"{len(text)} 字"
+```
+
+- 工具名会自动加 `ext__` 前缀，例如 `ext__word_count`
+- `run(args, workspace)` 返回字符串即可，异常会转成工具错误
+- 插件是受信任的本地 Python 代码，加载时会执行模块顶层语句；不要放来源不明的插件
+
 ## 界面自动化检查
 
 ```powershell

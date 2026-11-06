@@ -22,6 +22,7 @@ from .gui_tools import GUI_NAMES, GUI_SPECS, GuiError, execute_gui
 from .index import SKIP_DIRS, search_code
 from .memory import save_tool as memory_save
 from .office import read_docx, read_pptx, read_xlsx, write_docx, write_pptx, write_xlsx
+from .plugins import find as find_plugin
 from .proc import kill_tree
 
 MAX_OUTPUT = 3000
@@ -758,9 +759,22 @@ def execute(
     if not isinstance(args, dict):
         raise ToolError("args 必须是对象")
 
+    plugin = find_plugin(workspace, name)
     handler = _HANDLERS.get(name)
-    if handler is None and name not in GUI_NAMES:
+    if handler is None and name not in GUI_NAMES and plugin is None:
         raise ToolError(f"未知工具: {name}")
+
+    if plugin is not None:
+        if not plugin.read_only and not auto_allow:
+            if approver is None:
+                raise ToolError(f"{name} 需要人工确认，但当前没有确认通道")
+            if not approver(name, args, workspace):
+                raise ToolError("操作被用户拒绝，请换一种方式或询问用户")
+        try:
+            result = plugin.run(dict(args), workspace)
+        except Exception as error:  # noqa: BLE001 - 插件异常统一转成工具错误
+            raise ToolError(f"插件 {plugin.name} 执行失败：{error}") from error
+        return _truncate(str(result))
 
     if _needs_approval(name, args) and name not in READ_ONLY_GUI and not auto_allow:
         if approver is None:

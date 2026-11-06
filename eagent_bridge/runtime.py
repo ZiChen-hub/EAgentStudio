@@ -10,6 +10,7 @@ from pathlib import Path
 from .adapters import AdapterError, get_adapter
 from .backends import BackendError, ChatBackend, WebBackend, build_backend
 from .mcp_client import MCPClient, MCPError, describe_tools_for_prompt
+from .plugins import describe as describe_plugins, load as load_plugins
 from .server import _extract_json
 from .session import Session
 from .snapshots import backup as snapshot_backup
@@ -125,6 +126,9 @@ class AgentRuntime:
         self.auto_allow = auto_allow
         self.approver = approver
         self.on_event = on_event or (lambda kind, text: None)
+        self.plugins, self.plugin_errors = load_plugins(self.workspace)
+        if self.plugins:
+            self.enabled_tools = self.enabled_tools | {tool.name for tool in self.plugins}
         self.session = session or Session()
         config = dict(model_config or {})
         if str(config.get("provider") or "webai").lower() in ("webai", "web") and not config.get("site"):
@@ -164,6 +168,10 @@ class AgentRuntime:
         self._emit("status", self._backend_label())
         try:
             self._start_mcp()
+            if self.plugins:
+                self._emit("status", f"已加载 {len(self.plugins)} 个插件工具")
+            for error in self.plugin_errors:
+                self._emit("status", f"插件加载失败：{error}")
 
             rules = RULE_TEMPLATE.format(
                 workspace=str(self.workspace),
@@ -302,6 +310,8 @@ class AgentRuntime:
     def _tools_text(self) -> str:
         specs = [spec for spec in tool_specs() if spec["name"] in self.enabled_tools]
         text = describe_tools(specs)
+        if self.plugins:
+            text += "\n\n插件工具（本地 .eagent/tools 扩展）：\n" + describe_plugins(self.plugins)
         if self._mcp_descriptions:
             text += "\n\nMCP 工具（名称带 server__ 前缀）：\n" + "\n".join(self._mcp_descriptions)
         return text
