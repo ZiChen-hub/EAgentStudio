@@ -32,7 +32,7 @@ python -m eagent_bridge.webui
 - Agent 循环：工具调用、计划确认、逐步审批、命令流式输出、停止与任务队列
 - 工具：文件读写/搜索、通配符查找、批量复制移动删除、HTTP 请求与下载、Office 文档、命令执行、测试运行
 - 安全：写文件/执行命令前确认，白名单、只读工具自动放行、任务快照与一键回滚
-- 代码：Monaco 编辑器、文件树、搜索、符号跳转与引用、测试运行器、Git 面板、AI 生成提交信息
+- 代码：Monaco 编辑器（随应用内置，离线可用）、文件树、搜索、符号跳转与引用、测试运行器、Git 面板、AI 生成提交信息
 - Office：读写 docx/xlsx（纯标准库，无需安装 Office）；pptx 读取用标准库，写入需要本机安装 PowerPoint
 - 上下文：项目规则、长期记忆、技能、`.eagent` 会话记录、长任务自动压缩
 - 模型：网页 AI / OpenAI 兼容 / Anthropic / Gemini 原生 / Ollama，内置 DeepSeek API、OpenRouter、Gemini、Groq、Claude、本地 Ollama 预设
@@ -55,6 +55,7 @@ eagent_bridge/
   ui/index.html    页面结构
   ui/styles.css    界面样式
   ui/js/*.js       按功能拆分的脚本（核心、编辑器、Agent、终端、面板等）
+  ui/vendor/monaco Monaco 0.45.0 离线资源
   snapshots.py     任务快照与回滚
   index.py         代码索引、符号与引用检索
   mcp_client.py    MCP 客户端

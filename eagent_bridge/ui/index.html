@@ -463,13 +463,15 @@
     <button data-act="newfile">在此新建文件</button>
   </div>
 
-<script src="https://registry.npmmirror.com/monaco-editor/0.45.0/files/min/vs/loader.js"></script>
+<script src="/ui/vendor/monaco/vs/loader.js"></script>
 <script>
-  window.MONACO_BASE = "https://registry.npmmirror.com/monaco-editor/0.45.0/files/min/vs";
-  if (!window.require) {
-    window.MONACO_BASE = "https://unpkg.com/monaco-editor@0.45.0/min/vs";
-    document.write('<script src="' + window.MONACO_BASE + '/loader.js"><\/script>');
-  }
+  // Monaco 资源随应用内置，离线也能正常加载
+  window.MONACO_BASE = "/ui/vendor/monaco/vs";
+  window.MonacoEnvironment = {
+    getWorkerUrl: function () {
+      return window.MONACO_BASE + "/base/worker/workerMain.js";
+    },
+  };
 </script>
 <script src="/ui/js/core.js"></script>
 <script src="/ui/js/editor.js"></script>

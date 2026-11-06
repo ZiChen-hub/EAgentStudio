@@ -98,6 +98,10 @@ class StaticAssetTests(ServerCase, unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertIn(b"/ui/styles.css", body)
             self.assertIn(b"/ui/js/core.js", body)
+            # Monaco 必须走本地资源，不能再依赖 CDN
+            self.assertIn(b"/ui/vendor/monaco/vs/loader.js", body)
+            self.assertNotIn(b"registry.npmmirror.com", body)
+            self.assertNotIn(b"unpkg.com", body)
         finally:
             conn.close()
 
@@ -105,6 +109,8 @@ class StaticAssetTests(ServerCase, unittest.TestCase):
         for path, expected in (
             ("/ui/styles.css", "text/css"),
             ("/ui/js/core.js", "text/javascript"),
+            ("/ui/vendor/monaco/vs/loader.js", "text/javascript"),
+            ("/ui/vendor/monaco/vs/base/browser/ui/codicons/codicon/codicon.ttf", "font/ttf"),
         ):
             conn = http.client.HTTPConnection(
                 "127.0.0.1", self.server.server_address[1], timeout=10

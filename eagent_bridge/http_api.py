@@ -666,8 +666,11 @@ class Handler(BaseHTTPRequestHandler):
             ".css": "text/css; charset=utf-8",
             ".js": "text/javascript; charset=utf-8",
             ".json": "application/json; charset=utf-8",
+            ".map": "application/json; charset=utf-8",
             ".svg": "image/svg+xml",
             ".png": "image/png",
+            ".ttf": "font/ttf",
+            ".woff": "font/woff",
             ".woff2": "font/woff2",
         }.get(target.suffix.lower(), "application/octet-stream")
         data = target.read_bytes()
