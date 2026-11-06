@@ -72,6 +72,7 @@ MAX_IMAGE_BYTES = 20 * 1024 * 1024
 LOG_MAX_BYTES = 2 * 1024 * 1024
 _TOKEN_IN_LOG = re.compile(r"(token=)[^&\s\"]+")
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 
 
 def _append_log(workspace: Path, line: str) -> None:
@@ -348,9 +349,10 @@ def _load_run_session(state: AppState, run_id: str) -> dict | None:
         return None
     for file in _sessions_dir(state).glob(f"*-{run_id}.json"):
         try:
-            return json.loads(file.read_text(encoding="utf-8"))
+            data = json.loads(file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
+        return data if isinstance(data, dict) else None
     return None
 
 
@@ -949,13 +951,19 @@ def _list_sessions(state: AppState) -> list[dict]:
             data = json.loads(file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        if not isinstance(data, dict):
+            continue
         items.append(
             {
                 "id": file.stem,
                 "task": data.get("task") or "",
                 "summary": data.get("summary") or "",
                 "error": data.get("error"),
-                "created": data.get("created") or 0,
+                "created": (
+                    data.get("created")
+                    if isinstance(data.get("created"), (int, float))
+                    else 0
+                ),
             }
         )
     items.sort(key=lambda item: item["created"], reverse=True)
@@ -963,12 +971,15 @@ def _list_sessions(state: AppState) -> list[dict]:
 
 
 def _load_session(state: AppState, session_id: str) -> dict:
-    if "/" in session_id or "\\" in session_id or ".." in session_id:
+    if not _SESSION_ID_RE.fullmatch(session_id or ""):
         raise ValueError("会话 ID 非法")
     path = _sessions_dir(state) / f"{session_id}.json"
     if not path.is_file():
         raise ValueError("会话不存在")
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("会话记录格式异常")
+    return data
 
 
 def _list_files(state: AppState, limit: int = 8000) -> list[str]:

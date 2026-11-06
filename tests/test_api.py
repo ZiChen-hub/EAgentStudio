@@ -148,6 +148,20 @@ class McpConfigTests(ServerCase, unittest.TestCase):
         self.assertEqual(servers[0]["safeTools"], [])
 
 
+class SessionRecordTests(ServerCase, unittest.TestCase):
+    def test_malformed_session_file_is_skipped(self):
+        folder = self.workspace / ".eagent" / "sessions"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "123-bad.json").write_text("[]", encoding="utf-8")
+
+        status, data = self.api("GET", "/api/sessions")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["sessions"], [])
+
+        status, _ = self.api("GET", "/api/sessions/123-bad")
+        self.assertEqual(status, 400)
+
+
 class DesktopBridgeTests(unittest.TestCase):
     def test_choose_folder_accepts_string_and_list(self):
         from eagent_bridge.desktop import Bridge
