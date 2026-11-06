@@ -55,7 +55,11 @@ def list_skills(workspace: Path) -> list[dict]:
         return []
     items = []
     for file in sorted(base.glob("*.md")):
-        meta, body = _parse(file.read_text(encoding="utf-8", errors="replace"))
+        try:
+            meta, body = _parse(file.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            # 文件被删除或没有权限时跳过，别让整个技能面板报错
+            continue
         items.append(
             {
                 "id": file.stem,
@@ -63,13 +67,20 @@ def list_skills(workspace: Path) -> list[dict]:
                 "description": _description(meta, body),
             }
         )
-    for folder in sorted(base.iterdir()):
+    try:
+        folders = sorted(base.iterdir())
+    except OSError:
+        return items
+    for folder in folders:
         if not folder.is_dir():
             continue
         skill_file = folder / "SKILL.md"
-        if not skill_file.is_file():
+        try:
+            if not skill_file.is_file():
+                continue
+            meta, body = _parse(skill_file.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
             continue
-        meta, body = _parse(skill_file.read_text(encoding="utf-8", errors="replace"))
         items.append(
             {
                 "id": folder.name,

@@ -251,10 +251,14 @@ def _list_dir(workspace: Path, args: dict) -> str:
     for item in sorted(path.iterdir(), key=lambda p: (p.is_file(), p.name)):
         if item.name in SKIP_DIRS:
             continue
-        if item.is_dir():
-            entries.append(f"{item.name}/")
-        else:
-            entries.append(f"{item.name}  ({item.stat().st_size} 字节)")
+        try:
+            if item.is_dir():
+                entries.append(f"{item.name}/")
+            else:
+                entries.append(f"{item.name}  ({item.stat().st_size} 字节)")
+        except OSError:
+            # 遍历期间文件被删除或没有权限，跳过即可
+            continue
     if not entries:
         return "（空目录）"
     return "\n".join(entries)
@@ -270,6 +274,8 @@ def _read_file(workspace: Path, args: dict) -> str:
         raise ToolError(f"读取失败: {error}") from error
     start = max(int(args.get("start_line") or 1), 1)
     end = int(args.get("end_line") or len(lines))
+    if start > len(lines):
+        raise ToolError(f"起始行 {start} 超过文件总行数 {len(lines)}")
     end = min(end, len(lines), start + 400)
     body = [f"{index:>4} | {lines[index - 1]}" for index in range(start, end + 1)]
     header = f"{path.relative_to(workspace)}（第 {start}-{end} 行，共 {len(lines)} 行）"
@@ -824,7 +830,7 @@ def execute(
         return _truncate(handler(workspace, args))
     except ToolError:
         raise
-    except (ValueError, TypeError) as error:
+    except (ValueError, TypeError, OSError) as error:
         raise ToolError(str(error)) from error
 
 

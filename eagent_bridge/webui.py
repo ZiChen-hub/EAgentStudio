@@ -68,8 +68,10 @@ from .tools import SKIP_DIRS, ToolError, preview_action, safe_path
 UI_DIR = Path(__file__).parent / "ui"
 DEFAULT_PORT = int(os.environ.get("EAGENT_BRIDGE_WEBUI_PORT", "8766"))
 MAX_BODY_BYTES = 20 * 1024 * 1024
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
 LOG_MAX_BYTES = 2 * 1024 * 1024
 _TOKEN_IN_LOG = re.compile(r"(token=)[^&\s\"]+")
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 def _append_log(workspace: Path, line: str) -> None:
@@ -129,6 +131,8 @@ class AppState:
         self.queue_lock = threading.Lock()
         self.queue_failure: dict | None = None
         self.starting = False
+        # 网页 AI 共用同一个浏览器会话：任务运行与审查/记忆/提交信息等旁路调用必须互斥
+        self.model_lock = threading.Lock()
 
     def close(self) -> None:
         """退出钩子：当前没有需要显式释放的常驻资源。"""
@@ -257,6 +261,15 @@ def _generate_commit_message(workspace: Path, config: dict | None, session: Sess
 
 
 def _check_model(state: AppState, config: dict | None) -> dict:
+    if not state.model_lock.acquire(blocking=False):
+        return {"ok": False, "message": "模型正在处理其它任务，请稍后再试"}
+    try:
+        return _check_model_now(state, config)
+    finally:
+        state.model_lock.release()
+
+
+def _check_model_now(state: AppState, config: dict | None) -> dict:
     """检测当前模型是否可用：网页 AI 看登录与输入框，接口模型发一条最小请求。"""
     config = config or {}
     provider = str(config.get("provider") or "webai").lower()
@@ -331,7 +344,7 @@ def _parse_memory_items(text: str) -> list[str]:
 
 
 def _load_run_session(state: AppState, run_id: str) -> dict | None:
-    if not run_id or "/" in run_id or "\\" in run_id or ".." in run_id:
+    if not _RUN_ID_RE.fullmatch(run_id or ""):
         return None
     for file in _sessions_dir(state).glob(f"*-{run_id}.json"):
         try:
@@ -343,8 +356,15 @@ def _load_run_session(state: AppState, run_id: str) -> dict | None:
 
 def _suggest_memory(state: AppState, run_id: str, config: dict | None) -> list[str]:
     """任务结束后让模型提炼 1-3 条记忆候选，供用户确认。"""
-    if state.active_run():
+    if state.active_run() or not state.model_lock.acquire(blocking=False):
         return []
+    try:
+        return _suggest_memory_now(state, run_id, config)
+    finally:
+        state.model_lock.release()
+
+
+def _suggest_memory_now(state: AppState, run_id: str, config: dict | None) -> list[str]:
     record = _load_run_session(state, run_id)
     if not record:
         return []
@@ -466,8 +486,15 @@ def _run_diff(workspace: Path, run_id: str, max_chars: int = 3000) -> str:
 
 
 def _review_changes(state: AppState, run_id: str, config: dict | None) -> list[str]:
-    if state.active_run():
+    if state.active_run() or not state.model_lock.acquire(blocking=False):
         return []
+    try:
+        return _review_changes_now(state, run_id, config)
+    finally:
+        state.model_lock.release()
+
+
+def _review_changes_now(state: AppState, run_id: str, config: dict | None) -> list[str]:
     diff = _run_diff(state.workspace, run_id)
     if not diff.strip():
         return []
@@ -819,7 +846,9 @@ def _start_run(state: AppState, payload: dict) -> RunState:
         summary = ""
         error: str | None = None
         try:
-            summary = runtime.run(task)
+            # 和审查/记忆/提交信息等旁路模型调用互斥，避免同时操作网页会话
+            with state.model_lock:
+                summary = runtime.run(task)
             run.emit({"type": "run_done", "summary": summary})
         except StopRequested:
             summary = "已被用户停止"
@@ -1044,6 +1073,8 @@ class Handler(BaseHTTPRequestHandler):
                 path = safe_path(self.state.workspace, raw_path)
                 if not path.is_file():
                     raise ValueError("图片不存在")
+                if path.stat().st_size > MAX_IMAGE_BYTES:
+                    raise ValueError("图片过大（超过 20MB）")
                 suffix = path.suffix.lower()
                 content_type = {
                     ".png": "image/png",
@@ -1240,13 +1271,19 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True})
                 return
             if parsed.path == "/api/agent/new_session":
+                if self.state.busy_run():
+                    raise RuntimeError("任务运行中，不能新建会话，请先停止任务")
                 model = payload.get("model") if isinstance(payload.get("model"), dict) else {}
                 provider = str(model.get("provider") or "webai").lower()
                 if provider in ("webai", "web"):
+                    if not self.state.model_lock.acquire(blocking=False):
+                        raise RuntimeError("模型正在使用中，请稍后再试")
                     try:
                         self.state.session.new_chat(str(model.get("site") or "deepseek"))
                     except AdapterError as error:
                         raise ValueError(str(error)) from error
+                    finally:
+                        self.state.model_lock.release()
                 self._json(200, {"ok": True})
                 return
             if parsed.path == "/api/approval":
@@ -1288,6 +1325,8 @@ class Handler(BaseHTTPRequestHandler):
                 servers = data.get("mcpServers") if isinstance(data, dict) else None
                 if not isinstance(servers, dict) or name not in servers:
                     raise ValueError(f"MCP 服务不存在: {name}")
+                if not isinstance(servers[name], dict):
+                    raise ValueError(f"MCP 服务配置不是对象: {name}")
                 servers[name]["enabled"] = enabled
                 path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
                 self._json(200, {"ok": True})
@@ -1408,8 +1447,13 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/git/message":
                 if self.state.busy_run():
                     raise RuntimeError("任务运行中，先停止再生成提交信息")
-                config = payload.get("model") if isinstance(payload.get("model"), dict) else None
-                message = _generate_commit_message(self.state.workspace, config, self.state.session)
+                if not self.state.model_lock.acquire(blocking=False):
+                    raise RuntimeError("模型正在使用中，请稍后再试")
+                try:
+                    config = payload.get("model") if isinstance(payload.get("model"), dict) else None
+                    message = _generate_commit_message(self.state.workspace, config, self.state.session)
+                finally:
+                    self.state.model_lock.release()
                 self._json(200, {"ok": True, "message": message})
                 return
             if parsed.path == "/api/model/check":
@@ -1440,8 +1484,12 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/fs/rename":
                 source = safe_path(self.state.workspace, str(payload.get("path") or ""))
                 target = safe_path(self.state.workspace, str(payload.get("to") or ""))
-                if source == self.state.workspace:
-                    raise ValueError("不能重命名工作目录")
+                if source == self.state.workspace or (
+                    source.name == ".eagent" and source.parent == self.state.workspace
+                ):
+                    raise ValueError("不能重命名工作目录或 .eagent 内部目录")
+                if target.name == ".eagent" and target.parent == self.state.workspace:
+                    raise ValueError("不能把路径重命名为 .eagent")
                 if not source.exists():
                     raise ValueError("源路径不存在")
                 if target.exists():
@@ -1452,8 +1500,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/fs/delete":
                 path = safe_path(self.state.workspace, str(payload.get("path") or ""))
-                if path == self.state.workspace:
-                    raise ValueError("不能删除工作目录")
+                if path == self.state.workspace or (
+                    path.name == ".eagent" and path.parent == self.state.workspace
+                ):
+                    raise ValueError("不能删除工作目录或 .eagent 内部目录")
                 if not path.exists():
                     raise ValueError("路径不存在")
                 if path.is_dir():

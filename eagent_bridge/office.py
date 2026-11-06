@@ -298,10 +298,11 @@ def write_xlsx(path: Path, sheets: list) -> None:
         name = _sheet_name(sheet.get("name"), f"Sheet{index + 1}")
         base = name
         suffix = 2
-        while name in used_names:
+        # Excel 的工作表名不区分大小写，Data 与 data 也算重名
+        while name.lower() in used_names:
             name = f"{base[:26]}-{suffix}"[:31]
             suffix += 1
-        used_names.add(name)
+        used_names.add(name.lower())
         rows = sheet.get("rows") if isinstance(sheet.get("rows"), list) else []
         normalized.append((name, rows))
     if not normalized:

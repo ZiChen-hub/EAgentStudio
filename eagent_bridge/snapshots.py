@@ -97,7 +97,10 @@ def backup(workspace: Path, run_id: str, path: Path) -> None:
         if data is None:
             return
     files = data.setdefault("files", [])
-    if any(item.get("path") == key for item in files):
+    if not isinstance(files, list):
+        files = []
+        data["files"] = files
+    if any(item.get("path") == key for item in files if isinstance(item, dict)):
         return
 
     existed = path.is_file()
@@ -160,13 +163,22 @@ def list_snapshots(workspace: Path) -> list[dict]:
             continue
         if not data:
             continue
-        files = data.get("files") or []
+        raw_files = data.get("files")
+        files = (
+            [item for item in raw_files if isinstance(item, dict)]
+            if isinstance(raw_files, list)
+            else []
+        )
+        try:
+            created = float(data.get("created") or 0)
+        except (TypeError, ValueError):
+            created = 0.0
         items.append(
             {
                 "id": str(data.get("id") or entry.name),
                 "task": str(data.get("task") or ""),
                 "summary": str(data.get("summary") or ""),
-                "created": float(data.get("created") or 0),
+                "created": created,
                 "finished": data.get("finished"),
                 "restored": data.get("restored"),
                 "count": len(files),
@@ -194,7 +206,12 @@ def restore(workspace: Path, run_id: str) -> dict:
     data = _read_manifest(workspace, run_id)
     if data is None:
         raise ValueError("快照不存在")
-    files = data.get("files") or []
+    raw_files = data.get("files")
+    files = (
+        [item for item in raw_files if isinstance(item, dict)]
+        if isinstance(raw_files, list)
+        else []
+    )
     if not files:
         raise ValueError("这个快照没有可还原的文件")
 

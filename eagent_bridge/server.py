@@ -284,8 +284,14 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError) as error:
             self._error(400, "invalid_request_error", f"请求体不是合法 JSON: {error}")
             return
+        if not isinstance(body, dict):
+            self._error(400, "invalid_request_error", "请求体必须是 JSON 对象")
+            return
 
         messages = body.get("messages") or []
+        if not isinstance(messages, list):
+            self._error(400, "invalid_request_error", "messages 必须是数组")
+            return
         tools = body.get("tools") if isinstance(body.get("tools"), list) else None
         model = body.get("model") or MODEL_IDS[0]
         stream = bool(body.get("stream"))

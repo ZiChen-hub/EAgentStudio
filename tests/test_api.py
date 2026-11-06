@@ -88,6 +88,37 @@ class McpTemplateTests(ServerCase, unittest.TestCase):
         self.assertEqual(status, 400)
 
 
+class ModelGuardTests(ServerCase, unittest.TestCase):
+    def test_review_skips_while_model_busy(self):
+        from eagent_bridge.webui import _review_changes
+
+        self.state.model_lock.acquire()
+        try:
+            self.assertEqual(_review_changes(self.state, "run123", None), [])
+        finally:
+            self.state.model_lock.release()
+
+    def test_model_check_reports_busy(self):
+        self.state.model_lock.acquire()
+        try:
+            status, data = self.api("POST", "/api/model/check", {"model": {"provider": "nope"}})
+        finally:
+            self.state.model_lock.release()
+        self.assertEqual(status, 200)
+        self.assertFalse(data["ok"])
+        self.assertIn("正在处理", data["message"])
+
+    def test_new_session_rejected_while_running(self):
+        run = RunState()
+        self.state.runs[run.id] = run
+        self.state.current = run.id
+
+        status, data = self.api("POST", "/api/agent/new_session", {})
+
+        self.assertEqual(status, 409)
+        self.assertIn("任务运行中", data["error"])
+
+
 class QueueTests(ServerCase, unittest.TestCase):
     def test_reports_active_event_count(self):
         run = RunState()

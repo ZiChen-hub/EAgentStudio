@@ -71,6 +71,34 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(result["skipped"], ["big.bin"])
             self.assertEqual(result["restored"], [])
 
+    def test_list_snapshots_tolerates_broken_types(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder) / "work"
+            snapshot_dir = workspace / ".eagent" / "backups" / "run3"
+            snapshot_dir.mkdir(parents=True)
+            (snapshot_dir / "snapshot.json").write_text(
+                json.dumps({"id": "run3", "created": "not-a-number", "files": {"x": 1}}),
+                encoding="utf-8",
+            )
+
+            items = list_snapshots(workspace)
+
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["created"], 0.0)
+            self.assertEqual(items[0]["count"], 0)
+
+    def test_restore_tolerates_broken_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder) / "work"
+            snapshot_dir = workspace / ".eagent" / "backups" / "run4"
+            snapshot_dir.mkdir(parents=True)
+            (snapshot_dir / "snapshot.json").write_text(
+                json.dumps({"id": "run4", "files": "broken"}), encoding="utf-8"
+            )
+
+            with self.assertRaises(ValueError):
+                restore(workspace, "run4")
+
 
 class CookieDomainTests(unittest.TestCase):
     def test_matches_site_and_subdomain(self):

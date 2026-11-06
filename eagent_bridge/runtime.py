@@ -164,6 +164,8 @@ class AgentRuntime:
             pass
 
     def run(self, task: str) -> str:
+        # 排队期间用户可能已经点了停止，别再去重置网页会话或连接浏览器
+        self._check_stop()
         self.task = task
         self._emit("status", self._backend_label())
         try:

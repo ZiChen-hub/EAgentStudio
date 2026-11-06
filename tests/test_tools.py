@@ -62,6 +62,16 @@ class ApprovalTests(unittest.TestCase):
             self.assertEqual((workspace / "a.txt").read_text(encoding="utf-8"), "auto")
 
 
+class ReadFileTests(unittest.TestCase):
+    def test_start_line_beyond_file_raises(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            (workspace / "a.txt").write_text("one\ntwo\n", encoding="utf-8")
+
+            with self.assertRaises(ToolError):
+                execute("read_file", {"path": "a.txt", "start_line": 10}, workspace)
+
+
 class ReplaceTests(unittest.TestCase):
     def test_requires_unique_fragment(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -104,6 +104,21 @@ class XlsxTests(unittest.TestCase):
 
             self.assertEqual(sheets[0]["name"], 'A"B')
 
+    def test_sheet_names_are_case_insensitive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "a.xlsx"
+            write_xlsx(
+                path,
+                [
+                    {"name": "Data", "rows": [["a"]]},
+                    {"name": "data", "rows": [["b"]]},
+                ],
+            )
+
+            names = [sheet["name"] for sheet in read_xlsx(path)]
+
+            self.assertEqual(len(set(name.lower() for name in names)), len(names))
+
 
 class OfficeToolTests(unittest.TestCase):
     def test_write_requires_approval(self):
