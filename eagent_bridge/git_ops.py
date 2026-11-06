@@ -52,6 +52,39 @@ def init(workspace: Path) -> str:
     return out.strip()
 
 
+def _unquote_path(text: str) -> str:
+    """git 会把含空格等特殊字符的路径用双引号包起来，这里还原成真实路径。"""
+    text = text.strip()
+    if len(text) < 2 or not (text.startswith('"') and text.endswith('"')):
+        return text
+    body = text[1:-1]
+    escapes = {
+        "n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\",
+        "a": "\a", "b": "\b", "f": "\f", "v": "\v",
+    }
+    result: list[str] = []
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char != "\\" or index + 1 >= len(body):
+            result.append(char)
+            index += 1
+            continue
+        nxt = body[index + 1]
+        if nxt in escapes:
+            result.append(escapes[nxt])
+            index += 2
+            continue
+        octal = body[index + 1 : index + 4]
+        if len(octal) == 3 and all(item in "01234567" for item in octal):
+            result.append(chr(int(octal, 8)))
+            index += 4
+            continue
+        result.append(nxt)
+        index += 2
+    return "".join(result)
+
+
 def _parse_status(text: str) -> tuple[str, list[dict]]:
     branch = ""
     changes: list[dict] = []
@@ -68,6 +101,7 @@ def _parse_status(text: str) -> tuple[str, list[dict]]:
         path = line[3:].strip()
         if " -> " in path:
             path = path.split(" -> ", 1)[1]
+        path = _unquote_path(path)
         staged = code[0] not in (" ", "?")
         untracked = code == "??"
         if untracked:
@@ -160,7 +194,7 @@ def untracked_files(workspace: Path) -> list[str]:
     code, out, _ = _run(workspace, ["ls-files", "--others", "--exclude-standard"])
     if code != 0:
         return []
-    return [line.strip() for line in out.splitlines() if line.strip()][:50]
+    return [_unquote_path(line) for line in out.splitlines() if line.strip()][:50]
 
 
 def diff_pair(workspace: Path, path: str, staged: bool = False) -> dict:

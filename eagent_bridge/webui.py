@@ -610,15 +610,20 @@ def _load_mcp_servers(state: AppState) -> list[dict]:
             continue
         if config.get("enabled") is False:
             continue
+        raw_args = config.get("args")
+        raw_safe = config.get("safeTools") or config.get("safe_tools")
         items.append(
             {
                 "name": name,
                 "command": str(config["command"]),
-                "args": [str(item) for item in (config.get("args") or [])],
-                "env": config.get("env") or {},
-                "autoApprove": bool(config.get("autoApprove") or config.get("auto_approve")),
+                "args": [str(item) for item in raw_args] if isinstance(raw_args, list) else [],
+                "env": config.get("env") if isinstance(config.get("env"), dict) else {},
+                # 只有真正的布尔 true 才自动放行，字符串 "false" 不能当成真
+                "autoApprove": (
+                    config.get("autoApprove") is True or config.get("auto_approve") is True
+                ),
                 "enabled": config.get("enabled", True) is not False,
-                "safeTools": [str(item) for item in (config.get("safeTools") or config.get("safe_tools") or [])],
+                "safeTools": [str(item) for item in raw_safe] if isinstance(raw_safe, list) else [],
             }
         )
     return items
@@ -643,9 +648,11 @@ def _describe_mcp_servers(state: AppState) -> list[dict]:
             {
                 "name": name,
                 "command": config.get("command") or "",
-                "args": config.get("args") or [],
+                "args": config.get("args") if isinstance(config.get("args"), list) else [],
                 "enabled": config.get("enabled", True) is not False,
-                "autoApprove": bool(config.get("autoApprove") or config.get("auto_approve")),
+                "autoApprove": (
+                    config.get("autoApprove") is True or config.get("auto_approve") is True
+                ),
             }
         )
     return items
@@ -776,7 +783,17 @@ def _start_next(state: AppState) -> None:
 
 def _start_run(state: AppState, payload: dict) -> RunState:
     task = payload["task"]
-    whitelist = [item for item in (payload.get("whitelist") or []) if isinstance(item, str) and item.strip()]
+    try:
+        max_steps = int(payload.get("max_steps") or 12)
+    except (TypeError, ValueError) as error:
+        raise ValueError("max_steps 必须是整数") from error
+    max_steps = max(1, min(max_steps, 100))
+    raw_whitelist = payload.get("whitelist")
+    whitelist = (
+        [item for item in raw_whitelist if isinstance(item, str) and item.strip()]
+        if isinstance(raw_whitelist, list)
+        else []
+    )
     references = payload.get("references") if isinstance(payload.get("references"), dict) else {}
     skill_ids = list(payload.get("skills") or []) + list(references.get("skills") or [])
     model_config = payload.get("model") if isinstance(payload.get("model"), dict) else None
@@ -812,7 +829,7 @@ def _start_run(state: AppState, payload: dict) -> RunState:
         runtime = AgentRuntime(
             workspace=state.workspace,
             site=payload.get("site") or "deepseek",
-            max_steps=int(payload.get("max_steps") or 12),
+            max_steps=max_steps,
             auto_allow=bool(payload.get("auto_allow")),
             approver=lambda name, args, workspace: _request_approval(
                 run, name, args, workspace, whitelist, safe_tools
@@ -1196,14 +1213,16 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             if parsed.path == "/api/workspace":
-                if self.state.busy_run():
-                    raise RuntimeError("任务运行中，不能切换工作目录，请先停止任务")
                 target = Path(str(payload.get("path") or "")).expanduser().resolve()
                 if not target.is_dir():
                     raise ValueError(f"目录不存在: {target}")
-                old_workspace = self.state.workspace
-                self.state.workspace = target
-                self.state.term_cwd = target
+                # 和启动/排队线程共用一把锁，避免刚切完目录就有旧队列任务开跑
+                with self.state.queue_lock:
+                    if self.state.starting or self.state.busy_run() or self.state.queue:
+                        raise RuntimeError("任务运行中或队列未清空，不能切换工作目录，请先停止任务")
+                    old_workspace = self.state.workspace
+                    self.state.workspace = target
+                    self.state.term_cwd = target
                 reset_index(old_workspace)
                 self._json(200, {"path": str(target)})
                 return
@@ -1519,7 +1538,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(error)})
         except GitError as error:
             self._json(400, {"error": str(error)})
-        except (ValueError, OSError) as error:
+        except (ValueError, OSError, ToolError) as error:
             self._json(400, {"error": str(error)})
         except RuntimeError as error:
             self._json(409, {"error": str(error)})
@@ -1642,7 +1661,7 @@ class Handler(BaseHTTPRequestHandler):
                     f"id: 1\ndata: {json.dumps(final, ensure_ascii=False)}\n\n".encode("utf-8")
                 )
                 self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
+            except OSError:
                 pass
             return
 
@@ -1662,7 +1681,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.flush()
                 if done and not pending:
                     break
-        except (BrokenPipeError, ConnectionResetError):
+        except OSError:
+            # 浏览器断开、连接中止等都在这里收尾
             pass
 
     def _json(self, status: int, payload: dict) -> None:

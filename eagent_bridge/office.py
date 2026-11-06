@@ -22,6 +22,7 @@ PKG_RELS = "http://schemas.openxmlformats.org/package/2006/relationships"
 MAX_READ_CHARS = 60000
 MAX_PART_BYTES = 20 * 1024 * 1024
 MAX_CELLS = 200_000
+MAX_COLUMNS = 16_384  # Excel 单表最大列数（XFD）
 _ILLEGAL_XML = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 
 
@@ -259,6 +260,9 @@ def read_xlsx(path: Path) -> list[dict]:
                         if cells_seen > MAX_CELLS:
                             raise ValueError("表格单元格过多，已中止读取")
                         index = _column_index(cell.get("r") or "A1")
+                        if index >= MAX_COLUMNS:
+                            # 伪造的超大列号会把 rows 撑成巨大的稀疏列表
+                            continue
                         kind = cell.get("t")
                         if kind == "inlineStr":
                             values[index] = "".join(
@@ -340,6 +344,8 @@ def write_xlsx(path: Path, sheets: list) -> None:
         for row_index, row in enumerate(rows, start=1):
             if not isinstance(row, list):
                 continue
+            if len(row) > MAX_COLUMNS:
+                raise ValueError(f"单行最多 {MAX_COLUMNS} 列，当前有 {len(row)} 列")
             cells = "".join(
                 _cell_xml(row_index, column, value) for column, value in enumerate(row)
             )

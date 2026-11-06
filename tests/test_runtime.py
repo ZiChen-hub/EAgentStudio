@@ -15,7 +15,7 @@ from support import ROOT  # noqa: E402,F401
 
 from eagent_bridge.adapters import AdapterError  # noqa: E402
 from eagent_bridge.backends import ChatBackend  # noqa: E402
-from eagent_bridge.runtime import COMPACT_THRESHOLD, AgentRuntime  # noqa: E402
+from eagent_bridge.runtime import COMPACT_THRESHOLD, AgentRuntime, StopRequested  # noqa: E402
 
 
 def finish(summary: str = "done") -> str:
@@ -100,6 +100,37 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertEqual(runtime.run("写文件"), "written")
             self.assertEqual((workspace / "a.txt").read_text(encoding="utf-8"), "hi")
+
+
+    def test_stopped_before_start_skips_backend(self):
+        with tempfile.TemporaryDirectory() as folder:
+            backend = FakeBackend([finish()])
+            runtime = AgentRuntime(workspace=Path(folder), backend=backend)
+            runtime.stop_event.set()
+
+            with self.assertRaises(StopRequested):
+                runtime.run("任务")
+
+            self.assertFalse(backend.started)
+
+    def test_snapshot_write_covers_office_writes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            (workspace / "a.docx").write_text("old", encoding="utf-8")
+            runtime = AgentRuntime(
+                workspace=workspace, backend=FakeBackend([]), snapshot_id="run9"
+            )
+
+            runtime._snapshot_write(
+                "office_document", {"action": "write", "path": "a.docx"}
+            )
+            runtime._snapshot_write(
+                "office_document", {"action": "read", "path": "b.docx"}
+            )
+
+            files = workspace / ".eagent" / "backups" / "run9" / "files"
+            self.assertTrue((files / "a.docx").is_file())
+            self.assertFalse((files / "b.docx").exists())
 
 
 if __name__ == "__main__":

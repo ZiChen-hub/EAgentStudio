@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import winreg
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -118,6 +119,34 @@ class XlsxTests(unittest.TestCase):
             names = [sheet["name"] for sheet in read_xlsx(path)]
 
             self.assertEqual(len(set(name.lower() for name in names)), len(names))
+
+    def test_read_skips_absurd_column_reference(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "a.xlsx"
+            write_xlsx(path, [{"name": "S", "rows": [["x"]]}])
+            with zipfile.ZipFile(path) as archive:
+                parts = {name: archive.read(name) for name in archive.namelist()}
+            parts["xl/worksheets/sheet1.xml"] = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                "<sheetData><row r=\"1\">"
+                '<c r="XFDXFD1" t="inlineStr"><is><t>bad</t></is></c>'
+                '<c r="A1" t="inlineStr"><is><t>ok</t></is></c>'
+                "</row></sheetData></worksheet>"
+            ).encode("utf-8")
+            with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+                for name, data in parts.items():
+                    archive.writestr(name, data)
+
+            sheets = read_xlsx(path)
+
+            self.assertEqual(sheets[0]["rows"], [["ok"]])
+
+    def test_write_rejects_too_many_columns(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "a.xlsx"
+            with self.assertRaises(ValueError):
+                write_xlsx(path, [{"name": "S", "rows": [["x"] * 16385]}])
 
 
 class OfficeToolTests(unittest.TestCase):

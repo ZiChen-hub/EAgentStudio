@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 import urllib.request
@@ -12,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from support import ServerCase  # noqa: E402
 
-from eagent_bridge.webui import QueuedTask, RunState, _start_next  # noqa: E402
+from eagent_bridge.webui import QueuedTask, RunState, _load_mcp_servers, _start_next  # noqa: E402
 
 
 class TerminalTests(ServerCase, unittest.TestCase):
@@ -119,6 +120,50 @@ class ModelGuardTests(ServerCase, unittest.TestCase):
         self.assertIn("任务运行中", data["error"])
 
 
+class McpConfigTests(ServerCase, unittest.TestCase):
+    def test_string_flags_are_not_treated_as_true(self):
+        path = self.workspace / ".eagent" / "mcp.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "demo": {
+                            "command": "demo",
+                            "autoApprove": "false",
+                            "args": "bad",
+                            "safeTools": "Snapshot",
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        servers = _load_mcp_servers(self.state)
+
+        self.assertEqual(len(servers), 1)
+        self.assertFalse(servers[0]["autoApprove"])
+        self.assertEqual(servers[0]["args"], [])
+        self.assertEqual(servers[0]["safeTools"], [])
+
+
+class GitStatusParseTests(unittest.TestCase):
+    def test_quoted_paths_are_unquoted(self):
+        from eagent_bridge.git_ops import _parse_status
+
+        branch, changes = _parse_status(
+            '## main\n?? "a b.txt"\nR  "old name.txt" -> "new name.txt"\n'
+        )
+
+        self.assertEqual(branch, "main")
+        self.assertEqual(
+            [item["path"] for item in changes], ["a b.txt", "new name.txt"]
+        )
+        self.assertEqual(changes[0]["kind"], "untracked")
+        self.assertEqual(changes[1]["kind"], "renamed")
+
+
 class QueueTests(ServerCase, unittest.TestCase):
     def test_reports_active_event_count(self):
         run = RunState()
@@ -131,6 +176,17 @@ class QueueTests(ServerCase, unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(data["active"]["id"], run.id)
         self.assertEqual(data["active"]["events"], 1)
+
+    def test_workspace_switch_rejected_with_queued_tasks(self):
+        other = self.workspace.parent / "other"
+        other.mkdir()
+        self.state.queue.append(QueuedTask({"task": "排队中"}))
+
+        status, data = self.api("POST", "/api/workspace", {"path": str(other)})
+
+        self.assertEqual(status, 409)
+        self.assertIn("队列未清空", data["error"])
+        self.assertEqual(self.state.workspace, self.workspace)
 
     def test_failed_queued_task_is_reported(self):
         self.state.queue.append(QueuedTask({"task": "坏任务"}))

@@ -28,8 +28,8 @@ class MCPClient:
     ):
         self.name = name
         self.command = command
-        self.args = args or []
-        self.extra_env = env or {}
+        self.args = [str(item) for item in args] if isinstance(args, list) else []
+        self.extra_env = env if isinstance(env, dict) else {}
         self.timeout = timeout
         self.server_info: dict = {}
 
@@ -116,7 +116,8 @@ class MCPClient:
 
     def list_tools(self) -> list[dict]:
         result = self._request("tools/list", {}, timeout=self.timeout)
-        return result.get("tools") or []
+        tools = result.get("tools")
+        return [item for item in tools if isinstance(item, dict)] if isinstance(tools, list) else []
 
     def call_tool(
         self,
@@ -132,7 +133,12 @@ class MCPClient:
             timeout=timeout,
         )
         parts = []
-        for index, item in enumerate(result.get("content") or []):
+        raw_content = result.get("content")
+        content = raw_content if isinstance(raw_content, list) else []
+        for index, item in enumerate(content):
+            if not isinstance(item, dict):
+                parts.append(str(item)[:200])
+                continue
             kind = item.get("type")
             if kind == "text":
                 parts.append(item.get("text") or "")
@@ -232,11 +238,19 @@ def describe_tools_for_prompt(tools: list[dict], prefix: str) -> str:
     """把 MCP 工具压成提示词里的短描述。"""
     lines = []
     for tool in tools[:40]:
+        if not isinstance(tool, dict):
+            continue
         name = tool.get("name") or "unknown"
-        description = (tool.get("description") or "").replace("\n", " ")[:80]
-        schema = tool.get("inputSchema") or {}
-        properties = schema.get("properties") or {}
-        required = schema.get("required") or []
+        description = str(tool.get("description") or "").replace("\n", " ")[:80]
+        schema = tool.get("inputSchema")
+        if not isinstance(schema, dict):
+            schema = {}
+        properties = schema.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+        required = schema.get("required")
+        if not isinstance(required, list):
+            required = []
         params = ", ".join(
             f"{key}{'' if key in required else '?'}" for key in properties
         ) or "无"

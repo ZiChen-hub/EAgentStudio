@@ -146,12 +146,19 @@ class Session:
                 )
 
         target = find_site_target(self.port, adapter.url) or create_target(self.port, adapter.url)
+        previous = self._page
         page = Page(CDP(target["webSocketDebuggerUrl"]))
         page.wait_ready(timeout=15.0)
         if restore_cookies(page, self.profile_dir):
             # Cookie 写回后需要重新加载，单页应用才会读到登录态
             page.navigate(adapter.url)
         self._adapter, self._page = adapter, page
+        if previous is not None and previous is not page:
+            # 切换站点或重建标签页时关掉旧连接，避免 WebSocket 越攒越多
+            try:
+                previous.cdp.close()
+            except Exception:
+                pass
         return adapter, page
 
     @_locked
@@ -247,6 +254,7 @@ class Session:
             "ready": bool(state.get("input")),
         }
 
+    @_locked
     def navigate(self, url: str) -> dict:
         adapter, page = self.ensure(None)
         page.navigate(url)

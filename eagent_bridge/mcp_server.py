@@ -132,7 +132,9 @@ def _call_tool(name: str, args: dict, session: Session) -> dict:
 def _dispatch(message: dict, session: Session) -> dict | None:
     method = message.get("method")
     message_id = message.get("id")
-    params = message.get("params") or {}
+    params = message.get("params")
+    if not isinstance(params, dict):
+        params = {}
 
     if message_id is None:  # 通知，不需要响应
         return None
@@ -180,6 +182,9 @@ def main() -> None:
             message = json.loads(line)
         except json.JSONDecodeError:
             print(f"忽略无法解析的行: {line[:80]}", file=sys.stderr)
+            continue
+        if not isinstance(message, dict):
+            print(f"忽略非对象消息: {line[:80]}", file=sys.stderr)
             continue
         response = _dispatch(message, session)
         if response is not None:

@@ -44,12 +44,19 @@ class WebSocket:
             "Sec-WebSocket-Version: 13\r\n"
             "\r\n"
         )
-        self._sock.sendall(request.encode("ascii"))
-
-        header = self._read_until(b"\r\n\r\n")
-        status_line = header.split(b"\r\n", 1)[0].decode("latin-1")
-        if "101" not in status_line:
-            raise WebSocketError(f"WebSocket 握手失败: {status_line}")
+        try:
+            self._sock.sendall(request.encode("ascii"))
+            header = self._read_until(b"\r\n\r\n")
+            status_line = header.split(b"\r\n", 1)[0].decode("latin-1")
+            if "101" not in status_line:
+                raise WebSocketError(f"WebSocket 握手失败: {status_line}")
+        except Exception:
+            # 握手失败时把底层连接关掉，避免反复重连时累积半开 socket
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+            raise
 
     def settimeout(self, timeout: float) -> None:
         self._sock.settimeout(timeout)

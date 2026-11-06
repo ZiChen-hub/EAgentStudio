@@ -269,12 +269,16 @@ class AgentRuntime:
             if not name or not command:
                 self._emit("status", "MCP 配置缺少 name 或 command")
                 continue
+            try:
+                timeout = float(config.get("timeout") or 30)
+            except (TypeError, ValueError):
+                timeout = 30.0
             client = MCPClient(
                 name=name,
                 command=command,
-                args=[str(item) for item in (config.get("args") or [])],
-                env=config.get("env") or {},
-                timeout=float(config.get("timeout") or 30),
+                args=config.get("args") if isinstance(config.get("args"), list) else [],
+                env=config.get("env") if isinstance(config.get("env"), dict) else {},
+                timeout=timeout,
             )
             try:
                 client.start()
@@ -297,7 +301,10 @@ class AgentRuntime:
                 self._mcp_tools[qualified] = {
                     "client": client,
                     "original": tool_name,
-                    "auto_approve": bool(config.get("autoApprove") or config.get("auto_approve")),
+                    # 只有真正的布尔 true 才自动放行，字符串 "false" 不能当成真
+                    "auto_approve": (
+                        config.get("autoApprove") is True or config.get("auto_approve") is True
+                    ),
                     "spec": spec,
                 }
             description = describe_tools_for_prompt(tools, prefix)
@@ -371,7 +378,12 @@ class AgentRuntime:
 
     def _snapshot_write(self, name: str, args: dict) -> None:
         """改文件前把原内容存进本次任务快照，便于一键回滚。"""
-        if not self.snapshot_id or name not in ("write_file", "replace_in_file"):
+        if not self.snapshot_id:
+            return
+        if name == "office_document":
+            if str(args.get("action") or "").lower() != "write":
+                return
+        elif name not in ("write_file", "replace_in_file"):
             return
         try:
             target = safe_path(self.workspace, str(args.get("path") or ""))
