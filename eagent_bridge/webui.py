@@ -975,6 +975,9 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path in ("/", "/index.html"):
                 self._serve_ui()
                 return
+            if parsed.path.startswith("/ui/"):
+                self._serve_asset(unquote(parsed.path[len("/ui/"):]))
+                return
             if parsed.path == "/api/health":
                 self._json(200, {"status": "ok"})
                 return
@@ -1453,7 +1456,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _authorized(self) -> bool:
         parsed = urlparse(self.path)
-        if parsed.path == "/api/health":
+        if parsed.path == "/api/health" or parsed.path.startswith("/ui/"):
             return True
         token = self.headers.get("X-EAgent-Token") or ""
         if not token:
@@ -1472,6 +1475,37 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             raise ValueError("请求体必须是 JSON 对象")
         return payload
+
+    def _serve_asset(self, relative: str) -> None:
+        """提供 ui 目录下的样式和脚本；只允许读取 ui 内部文件。"""
+        root = UI_DIR.resolve()
+        try:
+            target = (root / relative).resolve()
+        except (OSError, ValueError):
+            self._json(404, {"error": "not found"})
+            return
+        if target != root and root not in target.parents:
+            self._json(404, {"error": "not found"})
+            return
+        if not target.is_file():
+            self._json(404, {"error": "not found"})
+            return
+        content_type = {
+            ".css": "text/css; charset=utf-8",
+            ".js": "text/javascript; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".woff2": "font/woff2",
+        }.get(target.suffix.lower(), "application/octet-stream")
+        data = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self._security_headers()
+        self.end_headers()
+        self.wfile.write(data)
 
     def _serve_ui(self) -> None:
         index = UI_DIR / "index.html"

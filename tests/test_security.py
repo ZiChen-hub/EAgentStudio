@@ -88,6 +88,47 @@ class PathTests(ServerCase, unittest.TestCase):
             conn.close()
 
 
+class StaticAssetTests(ServerCase, unittest.TestCase):
+    def test_index_references_split_assets(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=10)
+        try:
+            conn.request("GET", "/?token=" + self.token)
+            response = conn.getresponse()
+            body = response.read()
+            self.assertEqual(response.status, 200)
+            self.assertIn(b"/ui/styles.css", body)
+            self.assertIn(b"/ui/js/core.js", body)
+        finally:
+            conn.close()
+
+    def test_css_and_js_are_served_without_token(self):
+        for path, expected in (
+            ("/ui/styles.css", "text/css"),
+            ("/ui/js/core.js", "text/javascript"),
+        ):
+            conn = http.client.HTTPConnection(
+                "127.0.0.1", self.server.server_address[1], timeout=10
+            )
+            try:
+                conn.request("GET", path)
+                response = conn.getresponse()
+                response.read()
+                self.assertEqual(response.status, 200, path)
+                self.assertIn(expected, response.getheader("Content-Type") or "")
+            finally:
+                conn.close()
+
+    def test_asset_traversal_is_blocked(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=10)
+        try:
+            conn.request("GET", "/ui/%2e%2e/webui.py")
+            response = conn.getresponse()
+            response.read()
+            self.assertEqual(response.status, 404)
+        finally:
+            conn.close()
+
+
 class OpenAIServerTests(unittest.TestCase):
     def test_cors_disabled_without_api_key(self):
         import os

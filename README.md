@@ -46,7 +46,9 @@ eagent_bridge/
   adapters.py      各网页 AI 站点的选择器与收发消息
   session.py       浏览器启动、标签页复用、Cookie 持久化
   webui.py         本地 HTTP 服务、SSE、所有前端接口
-  ui/index.html    单页前端
+  ui/index.html    页面结构
+  ui/styles.css    界面样式
+  ui/js/*.js       按功能拆分的脚本（核心、编辑器、Agent、终端、面板等）
   snapshots.py     任务快照与回滚
   index.py         代码索引、符号与引用检索
   mcp_client.py    MCP 客户端

@@ -24,7 +24,7 @@ eagent-mcp = "eagent_bridge.mcp_server:main"
 include = ["eagent_bridge*"]
 
 [tool.setuptools.package-data]
-eagent_bridge = ["ui/*.html"]
+eagent_bridge = ["ui/*.html", "ui/*.css", "ui/js/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
