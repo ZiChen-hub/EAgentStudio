@@ -8,6 +8,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from .proc import kill_tree
+
 MAX_OUTPUT = 20000
 TIMEOUT = 180
 
@@ -126,22 +128,42 @@ def run(workspace: Path, command: str | None = None) -> dict:
     cmd = (command or "").strip() or detect_command(workspace)
     started = time.time()
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             cmd,
             cwd=str(workspace),
             shell=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=TIMEOUT,
         )
-        code = completed.returncode
-        output = (completed.stdout or "") + (completed.stderr or "")
+    except OSError as error:
+        return {
+            "command": cmd,
+            "exit_code": -1,
+            "duration": 0,
+            "passed": 0,
+            "failed": 0,
+            "failures": [],
+            "output": f"无法启动测试命令：{error}",
+        }
+
+    try:
+        output, _ = process.communicate(timeout=TIMEOUT)
+        code = process.returncode
     except subprocess.TimeoutExpired:
+        # 连同 npm/pytest 启动的子进程一起清理，避免超时后残留
+        kill_tree(process)
+        try:
+            output, _ = process.communicate(timeout=5)
+        except (subprocess.TimeoutExpired, OSError):
+            output = ""
         code = -1
-        output = f"测试超时（{TIMEOUT} 秒）"
+        output = (output or "") + f"\n测试超时（{TIMEOUT} 秒）"
+
     duration = round(time.time() - started, 1)
+    output = output or ""
     if len(output) > MAX_OUTPUT:
         output = output[:MAX_OUTPUT] + "\n...（输出过长，已截断）"
 

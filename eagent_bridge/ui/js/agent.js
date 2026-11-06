@@ -174,7 +174,7 @@ function queueWatch(delay) {
   }, delay || 800);
 }
 
-async function checkQueue() {
+async function checkQueue(silent = false) {
   let data;
   try {
     data = await api("/api/agent/queue", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
@@ -185,8 +185,12 @@ async function checkQueue() {
   renderQueueCard(items);
   if (!state.source && data.active) {
     const sameRun = data.active.id === state.runId;
-    if (!sameRun) logMessage("user", data.active.task || "（排队任务）");
-    connectEvents(data.active.id, sameRun ? state.lastEventId : 0);
+    if (!sameRun && !silent) logMessage("user", data.active.task || "（排队任务）");
+    // 刷新后恢复：跳过已经渲染过的历史事件，只接着收新事件
+    const since = sameRun
+      ? state.lastEventId
+      : (silent ? Number(data.active.events) || 0 : 0);
+    connectEvents(data.active.id, since);
     setSending(true);
     setStatus("运行中", "running");
   }

@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 
 MAX_SNAPSHOTS = 20
+# 超大文件只记录路径，不复制内容，避免快照目录被撑爆
+MAX_FILE_BYTES = 5 * 1024 * 1024
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
@@ -99,14 +101,21 @@ def backup(workspace: Path, run_id: str, path: Path) -> None:
         return
 
     existed = path.is_file()
+    skipped = False
     if existed:
-        target = _dir(workspace, run_id) / "files" / key
         try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
+            if path.stat().st_size > MAX_FILE_BYTES:
+                skipped = True
+            else:
+                target = _dir(workspace, run_id) / "files" / key
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
         except OSError:
             return
-    files.append({"path": key, "existed": existed})
+    entry = {"path": key, "existed": existed}
+    if skipped:
+        entry["skipped"] = True
+    files.append(entry)
     try:
         _write_manifest(workspace, run_id, data)
     except OSError:
@@ -144,7 +153,11 @@ def list_snapshots(workspace: Path) -> list[dict]:
     for entry in base.iterdir():
         if not entry.is_dir():
             continue
-        data = _read_manifest(workspace, entry.name)
+        try:
+            data = _read_manifest(workspace, entry.name)
+        except (OSError, ValueError):
+            # 目录名不是合法快照 ID 时跳过，别让整个面板报错
+            continue
         if not data:
             continue
         files = data.get("files") or []

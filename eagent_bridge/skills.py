@@ -36,6 +36,12 @@ def _candidates(workspace: Path, skill_id: str) -> list[Path]:
     return [base / f"{skill_id}.md", base / skill_id / "SKILL.md"]
 
 
+def _check_id(skill_id: str) -> str:
+    if not skill_id or "/" in skill_id or "\\" in skill_id or ".." in skill_id:
+        raise ValueError("技能 ID 非法")
+    return skill_id
+
+
 def _description(meta: dict, body: str) -> str:
     if meta.get("description"):
         return meta["description"]
@@ -75,8 +81,7 @@ def list_skills(workspace: Path) -> list[dict]:
 
 
 def load_skill(workspace: Path, skill_id: str) -> tuple[str, str]:
-    if not skill_id or "/" in skill_id or "\\" in skill_id or ".." in skill_id:
-        raise ValueError("技能 ID 非法")
+    _check_id(skill_id)
     for path in _candidates(workspace, skill_id):
         if path.is_file():
             meta, body = _parse(path.read_text(encoding="utf-8", errors="replace"))
@@ -134,6 +139,7 @@ def save_skill(
 
     target: Path | None = None
     if skill_id:
+        _check_id(skill_id)
         for path in _candidates(workspace, skill_id):
             if path.is_file():
                 target = path
@@ -157,8 +163,7 @@ def save_skill(
 
 
 def delete_skill(workspace: Path, skill_id: str) -> None:
-    if not skill_id or "/" in skill_id or "\\" in skill_id or ".." in skill_id:
-        raise ValueError("技能 ID 非法")
+    _check_id(skill_id)
     for path in _candidates(workspace, skill_id):
         if path.is_file():
             if path.parent.name == skill_id:  # <id>/SKILL.md

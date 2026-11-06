@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import os
+import threading
 import time
+from urllib.parse import urlparse
 
 from .adapters import (
     AdapterError,
@@ -38,6 +41,26 @@ def _cookie_file(profile_dir: str) -> str:
     return os.path.join(profile_dir, "eagent-cookies.json")
 
 
+def _domain_matches(domain: str, host: str) -> bool:
+    """只保留目标站点相关的 Cookie，避免把其它站点的登录态也写进明文文件。"""
+    cleaned = (domain or "").lstrip(".").lower()
+    target = (host or "").lower()
+    if not cleaned:
+        return True
+    return target == cleaned or target.endswith("." + cleaned)
+
+
+def _locked(method):
+    """同一个浏览器连接只允许一个调用方使用，避免 CDP 响应互相抢占。"""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 def restore_cookies(page: Page, profile_dir: str) -> int:
     """把上次保存的登录态写回浏览器，避免每次重启都要重新登录。"""
     path = _cookie_file(profile_dir)
@@ -57,14 +80,17 @@ def restore_cookies(page: Page, profile_dir: str) -> int:
     return len(cookies)
 
 
-def save_cookies(page: Page, profile_dir: str) -> int:
-    """保存当前 Cookie。浏览器被强制结束时，磁盘上的会话 Cookie 可能来不及落盘。"""
+def save_cookies(page: Page, profile_dir: str, site_url: str = "") -> int:
+    """保存目标站点的 Cookie。浏览器被强制结束时，磁盘上的会话 Cookie 可能来不及落盘。"""
     try:
         result = page.cdp.call("Network.getAllCookies")
     except CDPError:
         return 0
+    host = urlparse(site_url).hostname if site_url else ""
     cookies = []
     for cookie in result.get("cookies") or []:
+        if host and not _domain_matches(str(cookie.get("domain") or ""), host):
+            continue
         item = {key: cookie[key] for key in _COOKIE_KEYS if key in cookie}
         if isinstance(item.get("expires"), (int, float)) and item["expires"] < 0:
             item.pop("expires")
@@ -91,6 +117,7 @@ class Session:
         self.last_throttle_seconds = 0.0
         self._adapter: WebAIAdapter | None = None
         self._page: Page | None = None
+        self._lock = threading.RLock()
 
     # ---- 对外接口 ----
 
@@ -104,6 +131,7 @@ class Session:
             self._page = None
             return False
 
+    @_locked
     def ensure(self, site: str | None = None) -> tuple[WebAIAdapter, Page]:
         adapter = get_adapter(site)
         if self._adapter is not None and self._adapter.key == adapter.key and self._alive():
@@ -126,6 +154,7 @@ class Session:
         self._adapter, self._page = adapter, page
         return adapter, page
 
+    @_locked
     def ask(
         self,
         prompt: str,
@@ -153,11 +182,12 @@ class Session:
                     )
                 except Exception:
                     raise AdapterError(f"与浏览器通信失败，重试也未成功: {error}") from error
-            save_cookies(page, self.profile_dir)
+            save_cookies(page, self.profile_dir, adapter.url)
             return reply
         finally:
             self._last_ask_end = time.monotonic()
 
+    @_locked
     def new_chat(self, site: str | None = None, stop_event=None) -> dict:
         try:
             adapter, page = self.ensure(site)
@@ -170,7 +200,7 @@ class Session:
                 info = start_new_chat(page, adapter, stop_event=stop_event)
             except Exception:
                 raise AdapterError(f"与浏览器通信失败，重试也未成功: {error}") from error
-        save_cookies(page, self.profile_dir)
+        save_cookies(page, self.profile_dir, adapter.url)
         return {"site": adapter.label, **info}
 
     def _throttle(self) -> float:
@@ -183,11 +213,12 @@ class Session:
         time.sleep(remaining)
         return remaining
 
+    @_locked
     def new_session(self, site: str | None = None, wait_login: float = 30.0) -> dict:
         adapter, page = self.ensure(site)
         ready = wait_input(page, adapter, wait_login)
         if ready:
-            save_cookies(page, self.profile_dir)
+            save_cookies(page, self.profile_dir, adapter.url)
         state = snapshot(page, adapter)
         return {
             "site": adapter.label,
@@ -200,6 +231,7 @@ class Session:
             ),
         }
 
+    @_locked
     def status(self) -> dict:
         if self._page is None or self._adapter is None:
             return {"session": False, "port": self.port, "hint": "还没有连接浏览器，先调用 webai_new_session"}
@@ -220,6 +252,7 @@ class Session:
         page.navigate(url)
         return {"url": page.url(), "title": page.title()}
 
+    @_locked
     def screenshot(self) -> str:
         _, page = self.ensure(None)
         return page.screenshot()

@@ -73,5 +73,19 @@ class ModelCheckTests(ServerCase, unittest.TestCase):
         self.assertFalse(data["ok"])
 
 
+class QueueTests(ServerCase, unittest.TestCase):
+    def test_reports_active_event_count(self):
+        run = RunState()
+        run.emit({"type": "agent", "kind": "assistant", "text": "x"})
+        self.state.runs[run.id] = run
+        self.state.current = run.id
+
+        status, data = self.api("POST", "/api/agent/queue", {})
+
+        self.assertEqual(status, 200)
+        self.assertEqual(data["active"]["id"], run.id)
+        self.assertEqual(data["active"]["events"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

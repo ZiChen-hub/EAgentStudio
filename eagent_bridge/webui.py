@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .adapters import AdapterError
 from .backends import BackendError, build_backend
-from .cdp import find_edge
+from .cdp import CDPError, find_edge
 from .git_ops import (
     GitError,
     commit as git_commit,
@@ -57,8 +57,8 @@ from .rules import build_rules, delete_rule, list_rules, load_rule, save_rule
 from .session import Session
 from .snapshots import begin as snapshot_begin, finish as snapshot_finish
 from .snapshots import list_snapshots, restore as snapshot_restore
-from .pty_session import PtyError, PtySession
 from .skills import build_instructions, delete_skill, list_skills, load_skill, save_skill
+from .proc import kill_tree
 from .storage import prune as prune_folder
 from .testrunner import detect_command as detect_test_command
 from .testrunner import run as run_tests
@@ -120,7 +120,6 @@ class AppState:
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace.resolve()
         self.session = Session()
-        self.shell: PtySession | None = None
         self.term_cwd: Path = self.workspace
         self.runs: dict[str, RunState] = {}
         self.current: str | None = None
@@ -130,9 +129,7 @@ class AppState:
         self.starting = False
 
     def close(self) -> None:
-        if self.shell:
-            self.shell.close()
-            self.shell = None
+        """退出钩子：当前没有需要显式释放的常驻资源。"""
 
     def add_run(self, run: RunState) -> None:
         with self.lock:
@@ -265,7 +262,7 @@ def _check_model(state: AppState, config: dict | None) -> dict:
         site = str(config.get("site") or "deepseek")
         try:
             state.session.ensure(site)
-        except (AdapterError, OSError) as error:
+        except (AdapterError, CDPError, OSError) as error:
             return {"ok": False, "message": f"浏览器连接失败：{error}"}
         status = state.session.status()
         if status.get("ready"):
@@ -404,6 +401,19 @@ def _parse_review_items(text: str) -> list[str]:
     return items
 
 
+def _inside_dir(root: Path, target: Path) -> bool:
+    """target 必须位于 root 之内，用于处理来自快照清单等不完全可信的路径。"""
+    try:
+        resolved_root = root.resolve()
+        resolved = target.resolve()
+    except (OSError, ValueError):
+        return False
+    return resolved == resolved_root or resolved_root in resolved.parents
+
+
+MAX_DIFF_FILE_BYTES = 2_000_000
+
+
 def _run_diff(workspace: Path, run_id: str, max_chars: int = 3000) -> str:
     """把快照里改动过的文件拼成一段 unified diff，供审查角色阅读。"""
     from .snapshots import _dir as snapshot_dir  # 复用快照目录结构
@@ -415,14 +425,26 @@ def _run_diff(workspace: Path, run_id: str, max_chars: int = 3000) -> str:
             continue
         for rel in item["files"][:6]:
             old = ""
-            backup = snapshot_dir(workspace, run_id) / "files" / rel
-            if backup.is_file():
-                try:
-                    old = backup.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    old = ""
+            files_root = snapshot_dir(workspace, run_id) / "files"
+            backup = files_root / rel
             try:
-                new = (workspace / rel).read_text(encoding="utf-8", errors="replace")
+                if (
+                    _inside_dir(files_root, backup)
+                    and backup.is_file()
+                    and backup.stat().st_size <= MAX_DIFF_FILE_BYTES
+                ):
+                    old = backup.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                old = ""
+            target = workspace / rel
+            new = ""
+            try:
+                if (
+                    _inside_dir(workspace, target)
+                    and target.is_file()
+                    and target.stat().st_size <= MAX_DIFF_FILE_BYTES
+                ):
+                    new = target.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 new = ""
             diff = "\n".join(
@@ -485,24 +507,34 @@ def _terminal_exec(state: AppState, command: str) -> dict:
         return {"output": "", "exit_code": 0, "cwd": str(target)}
 
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             ["powershell", "-NoProfile", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + text],
             cwd=str(cwd),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=TERM_TIMEOUT,
         )
-    except subprocess.TimeoutExpired:
-        return {"output": f"命令超时（{TERM_TIMEOUT} 秒）\n", "exit_code": -1, "cwd": str(cwd)}
     except OSError as error:
         return {"output": f"无法启动 PowerShell：{error}\n", "exit_code": 1, "cwd": str(cwd)}
 
-    output = ((completed.stdout or "") + (completed.stderr or "")).lstrip("\r\n")
+    try:
+        output, _ = process.communicate(timeout=TERM_TIMEOUT)
+        code = process.returncode
+    except subprocess.TimeoutExpired:
+        # 只杀 powershell 会留下它启动的子进程，必须按进程树清理
+        kill_tree(process)
+        try:
+            process.communicate(timeout=5)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        return {"output": f"命令超时（{TERM_TIMEOUT} 秒）\n", "exit_code": -1, "cwd": str(cwd)}
+
+    output = (output or "").lstrip("\r\n")
     if not output.endswith("\n") and output:
         output += "\n"
-    return {"output": output, "exit_code": completed.returncode, "cwd": str(cwd)}
+    return {"output": output, "exit_code": code, "cwd": str(cwd)}
 
 
 def _mcp_file(state: AppState) -> Path:
@@ -922,13 +954,19 @@ def _tree(state: AppState, raw_path: str) -> list[dict]:
     for item in sorted(path.iterdir(), key=lambda p: (p.is_file(), p.name.lower())):
         if item.name in SKIP_DIRS:
             continue
+        try:
+            is_dir = item.is_dir()
+            size = item.stat().st_size if not is_dir else 0
+        except OSError:
+            # 遍历期间文件被删除或没有权限，跳过即可
+            continue
         relative = str(item.relative_to(state.workspace))
         entries.append(
             {
                 "name": item.name,
                 "path": relative,
-                "type": "dir" if item.is_dir() else "file",
-                "size": item.stat().st_size if item.is_file() else 0,
+                "type": "dir" if is_dir else "file",
+                "size": size,
             }
         )
     return entries
@@ -948,10 +986,7 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt: str, *args) -> None:
-        # 终端轮询很频繁，不刷日志
         line = fmt % args
-        if "/api/terminal/output" in line:
-            return
         line = _TOKEN_IN_LOG.sub(r"\1***", line)
         print(f"[webui] {line}", file=sys.stderr)
         _append_log(self.state.workspace, line)
@@ -1014,16 +1049,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(data)
-                return
-            if parsed.path == "/api/terminal/output":
-                since = int((params.get("since") or ["0"])[0] or 0)
-                try:
-                    if self.state.shell is None:
-                        self.state.shell = PtySession(self.state.workspace)
-                    snapshot = self.state.shell.snapshot(since)
-                except PtyError as error:
-                    raise ValueError(str(error)) from error
-                self._json(200, snapshot)
                 return
             if parsed.path == "/api/agent/events":
                 self._stream(params.get("run", [""])[0])
@@ -1128,7 +1153,7 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             if parsed.path == "/api/workspace":
-                if self.state.active_run():
+                if self.state.busy_run():
                     raise RuntimeError("任务运行中，不能切换工作目录，请先停止任务")
                 target = Path(str(payload.get("path") or "")).expanduser().resolve()
                 if not target.is_dir():
@@ -1137,10 +1162,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.workspace = target
                 self.state.term_cwd = target
                 reset_index(old_workspace)
-                if self.state.shell:
-                    old_terminal = self.state.shell
-                    self.state.shell = None
-                    threading.Thread(target=old_terminal.close, daemon=True).start()
                 self._json(200, {"path": str(target)})
                 return
             if parsed.path == "/api/file":
@@ -1174,7 +1195,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(
                     200,
                     {
-                        "active": {"id": active.id, "task": active.task} if active else None,
+                        "active": (
+                            {"id": active.id, "task": active.task, "events": len(active.events)}
+                            if active
+                            else None
+                        ),
                         "items": items,
                     },
                 )
@@ -1218,18 +1243,6 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("确认请求已失效")
                 holder["allow"] = bool(payload.get("allow"))
                 holder["event"].set()
-                self._json(200, {"ok": True})
-                return
-            if parsed.path == "/api/terminal/write":
-                data = str(payload.get("data") or "")
-                if not data:
-                    raise ValueError("data 不能为空")
-                try:
-                    if self.state.shell is None:
-                        self.state.shell = PtySession(self.state.workspace)
-                    self.state.shell.write(data)
-                except PtyError as error:
-                    raise ValueError(str(error)) from error
                 self._json(200, {"ok": True})
                 return
             if parsed.path == "/api/mcp":
@@ -1374,7 +1387,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, run_tests(self.state.workspace, command))
                 return
             if parsed.path == "/api/git/message":
-                if self.state.active_run():
+                if self.state.busy_run():
                     raise RuntimeError("任务运行中，先停止再生成提交信息")
                 config = payload.get("model") if isinstance(payload.get("model"), dict) else None
                 message = _generate_commit_message(self.state.workspace, config, self.state.session)

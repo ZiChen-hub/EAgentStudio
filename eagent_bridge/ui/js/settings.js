@@ -555,3 +555,8 @@ async function saveMcpEditor() {
 $("addMcp").addEventListener("click", openMcpEditor);
 $("mcpEditorCancel").addEventListener("click", () => $("mcpEditor").classList.add("hidden"));
 $("mcpEditorSave").addEventListener("click", saveMcpEditor);
+
+$("maxSteps").addEventListener("change", () => { settings.maxSteps = $("maxSteps").value; persistSettings(); });
+$("autoAllow").addEventListener("change", () => { settings.autoAllow = $("autoAllow").checked; persistSettings(); });
+$("planFirst").addEventListener("change", () => { settings.planFirst = $("planFirst").checked; persistSettings(); });
+$("theme").addEventListener("change", () => applyTheme($("theme").value));

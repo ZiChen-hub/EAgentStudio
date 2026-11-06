@@ -17,6 +17,7 @@ from pathlib import Path
 from .gui_tools import GUI_NAMES, GUI_SPECS, GuiError, execute_gui
 from .index import SKIP_DIRS, search_code
 from .memory import save_tool as memory_save
+from .proc import kill_tree
 
 MAX_OUTPUT = 3000
 
@@ -275,26 +276,6 @@ def _pump(stream, sink: "queue.Queue[str | None]") -> None:
         sink.put(None)
 
 
-def _kill_tree(process: subprocess.Popen) -> None:
-    """Windows 下 shell=True 只杀 cmd 会留下孤儿进程，需要连同子进程一起结束。"""
-    if process.poll() is not None:
-        return
-    try:
-        if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                capture_output=True,
-                timeout=5,
-            )
-        else:
-            process.kill()
-    except (OSError, subprocess.TimeoutExpired):
-        try:
-            process.kill()
-        except OSError:
-            pass
-
-
 def _run_command(workspace: Path, args: dict, on_output=None, stop_event=None) -> str:
     command = args.get("command")
     if not command:
@@ -333,11 +314,11 @@ def _run_command(workspace: Path, args: dict, on_output=None, stop_event=None) -
             except queue.Empty:
                 if stop_event is not None and stop_event.is_set():
                     stopped = True
-                    _kill_tree(process)
+                    kill_tree(process)
                     break
                 if time.time() - started > COMMAND_TIMEOUT:
                     timed_out = True
-                    _kill_tree(process)
+                    kill_tree(process)
                     break
                 continue
             if line is None:
@@ -355,7 +336,7 @@ def _run_command(workspace: Path, args: dict, on_output=None, stop_event=None) -
                     pass
     finally:
         if process.poll() is None:
-            _kill_tree(process)
+            kill_tree(process)
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:

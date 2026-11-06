@@ -170,8 +170,3 @@ $("task").addEventListener("keydown", (event) => {
     closeRefPopup();
   }
 });
-
-$("maxSteps").addEventListener("change", () => { settings.maxSteps = $("maxSteps").value; persistSettings(); });
-$("autoAllow").addEventListener("change", () => { settings.autoAllow = $("autoAllow").checked; persistSettings(); });
-$("planFirst").addEventListener("change", () => { settings.planFirst = $("planFirst").checked; persistSettings(); });
-$("theme").addEventListener("change", () => applyTheme($("theme").value));

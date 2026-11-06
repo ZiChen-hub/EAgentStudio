@@ -1,6 +1,2 @@
 # 运行依赖
 pywebview>=4.4
-
-# 桌面终端（可选：缺失时终端仍可用行输入模式）
-pywinpty>=2.0; sys_platform == "win32"
-pyte>=0.8

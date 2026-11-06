@@ -84,6 +84,8 @@ function boot() {
       switchChatWorkspace(data.path);
       setStatus("就绪");
       logMessage("status", "工作目录已加载：" + data.path + "　描述任务即可开始");
+      // 刷新页面后如果任务还在跑，直接接上事件流和队列卡片
+      checkQueue(true);
     } catch (error) {
       logMessage("error", error.message);
     }
