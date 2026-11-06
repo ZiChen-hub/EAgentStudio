@@ -9,9 +9,13 @@ import fnmatch
 import json
 import os
 import queue
+import shutil
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from .gui_tools import GUI_NAMES, GUI_SPECS, GuiError, execute_gui
@@ -108,6 +112,48 @@ def tool_specs() -> list[dict]:
                     "cwd": {"type": "string", "default": "."},
                 },
                 "required": ["command"],
+            },
+        },
+        {
+            "name": "find_files",
+            "description": "按文件名或相对路径的通配符查找文件，例如 *.py、src/**/*.ts",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "通配符，例如 *.py"},
+                    "path": {"type": "string", "default": "."},
+                    "max_results": {"type": "integer", "default": 100},
+                },
+                "required": ["pattern"],
+            },
+        },
+        {
+            "name": "batch_files",
+            "description": "批量复制、移动或删除文件/目录（需要确认）",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["copy", "move", "delete"]},
+                    "paths": {"type": "array", "items": {"type": "string"}},
+                    "destination": {"type": "string", "description": "copy/move 的目标目录"},
+                },
+                "required": ["action", "paths"],
+            },
+        },
+        {
+            "name": "http_request",
+            "description": "发起 HTTP 请求，可选把响应保存到工作目录（需要确认）",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "method": {"type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"], "default": "GET"},
+                    "url": {"type": "string"},
+                    "headers": {"type": "object"},
+                    "body": {"type": "string"},
+                    "timeout": {"type": "integer", "description": "秒，默认 30，最大 120"},
+                    "save_path": {"type": "string", "description": "可选，把响应写入这个相对路径"},
+                },
+                "required": ["url"],
             },
         },
         {
@@ -368,6 +414,158 @@ def _save_memory(workspace: Path, args: dict) -> str:
         raise ToolError(str(error)) from error
 
 
+HTTP_TIMEOUT = 30
+HTTP_MAX_TEXT = 20000
+HTTP_MAX_FILE = 50 * 1024 * 1024
+
+
+def _find_files(workspace: Path, args: dict) -> str:
+    pattern = str(args.get("pattern") or "").strip()
+    if not pattern:
+        raise ToolError("pattern 不能为空")
+    base = _resolve(workspace, str(args.get("path") or "."))
+    if not base.is_dir():
+        raise ToolError(f"不是目录: {args.get('path')}")
+    try:
+        limit = min(max(int(args.get("max_results") or 100), 1), 500)
+    except (TypeError, ValueError):
+        limit = 100
+    needle = pattern.lower()
+    results: list[str] = []
+    for root, dirs, names in os.walk(base):
+        dirs[:] = sorted(name for name in dirs if name not in SKIP_DIRS)
+        for name in sorted(names):
+            path = Path(root) / name
+            relative = str(path.relative_to(workspace)).replace("\\", "/")
+            if fnmatch.fnmatch(name.lower(), needle) or fnmatch.fnmatch(relative.lower(), needle):
+                results.append(relative)
+                if len(results) >= limit:
+                    return "\n".join(results)
+    return "\n".join(results) if results else "没有找到匹配文件"
+
+
+def _batch_files(workspace: Path, args: dict) -> str:
+    action = str(args.get("action") or "").lower()
+    if action not in ("copy", "move", "delete"):
+        raise ToolError("action 只能是 copy / move / delete")
+    raw_paths = args.get("paths")
+    if not isinstance(raw_paths, list) or not raw_paths:
+        raise ToolError("paths 必须是非空数组")
+    if len(raw_paths) > 200:
+        raise ToolError("一次最多处理 200 个路径")
+
+    sources: list[Path] = []
+    for raw in raw_paths:
+        source = _resolve(workspace, str(raw))
+        if source == workspace:
+            raise ToolError("不能操作工作目录本身")
+        if not source.exists():
+            raise ToolError(f"路径不存在: {raw}")
+        sources.append(source)
+
+    if action == "delete":
+        try:
+            for source in sources:
+                if source.is_dir():
+                    shutil.rmtree(source)
+                else:
+                    source.unlink()
+        except OSError as error:
+            raise ToolError(f"删除失败：{error}") from error
+        return f"已删除 {len(sources)} 个路径"
+
+    raw_destination = str(args.get("destination") or "").strip()
+    if not raw_destination:
+        raise ToolError("destination 不能为空")
+    destination = _resolve(workspace, raw_destination)
+    if destination.exists() and not destination.is_dir():
+        raise ToolError("destination 必须是目录")
+    try:
+        destination.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise ToolError(f"创建目标目录失败：{error}") from error
+
+    targets = [destination / source.name for source in sources]
+    if len({target.name for target in targets}) != len(targets):
+        raise ToolError("多个路径同名，无法批量处理")
+    for target in targets:
+        if target.exists():
+            raise ToolError(f"目标已存在: {target.relative_to(workspace)}")
+
+    try:
+        for source, target in zip(sources, targets):
+            if action == "copy":
+                if source.is_dir():
+                    shutil.copytree(source, target)
+                else:
+                    shutil.copy2(source, target)
+            else:
+                shutil.move(str(source), str(target))
+    except OSError as error:
+        raise ToolError(f"{action} 失败：{error}") from error
+    verb = "复制" if action == "copy" else "移动"
+    return f"已{verb} {len(sources)} 个路径到 {destination.relative_to(workspace)}"
+
+
+def _http_request(workspace: Path, args: dict) -> str:
+    method = str(args.get("method") or "GET").upper()
+    if method not in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"):
+        raise ToolError("不支持的 method")
+    url = str(args.get("url") or "").strip()
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ToolError("url 必须是 http/https 地址")
+    headers = args.get("headers")
+    if headers is not None and not isinstance(headers, dict):
+        raise ToolError("headers 必须是对象")
+    header_map = {str(key): str(value) for key, value in (headers or {}).items()}
+    body = args.get("body")
+    data = None
+    if body is not None and method != "HEAD":
+        text = body if isinstance(body, str) else json.dumps(body, ensure_ascii=False)
+        data = text.encode("utf-8")
+    try:
+        timeout = min(max(int(args.get("timeout") or HTTP_TIMEOUT), 1), 120)
+    except (TypeError, ValueError):
+        timeout = HTTP_TIMEOUT
+
+    request = urllib.request.Request(url, data=data, headers=header_map, method=method)
+    save_path = str(args.get("save_path") or "").strip()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = response.status
+            content_type = response.headers.get("Content-Type", "")
+            raw = response.read(HTTP_MAX_FILE + 1 if save_path else HTTP_MAX_TEXT + 1)
+    except urllib.error.HTTPError as error:
+        text = error.read(HTTP_MAX_TEXT).decode("utf-8", "replace")
+        return f"HTTP {error.code}\n{text}".strip()
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise ToolError(f"请求失败：{error}") from error
+
+    if save_path:
+        if len(raw) > HTTP_MAX_FILE:
+            raise ToolError("响应超过 50MB，已中止保存")
+        target = _resolve(workspace, save_path)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+        except OSError as error:
+            raise ToolError(f"保存响应失败：{error}") from error
+        return f"HTTP {status} {content_type}\n已保存到 {target.relative_to(workspace)}（{len(raw)} 字节）"
+
+    truncated = len(raw) > HTTP_MAX_TEXT
+    raw = raw[:HTTP_MAX_TEXT]
+    encoding = "utf-8"
+    if "charset=" in content_type.lower():
+        encoding = content_type.lower().split("charset=", 1)[1].split(";", 1)[0].strip() or "utf-8"
+    try:
+        text = raw.decode(encoding, "replace")
+    except LookupError:
+        text = raw.decode("utf-8", "replace")
+    suffix = "\n...（响应过长，已截断）" if truncated else ""
+    return f"HTTP {status} {content_type}\n{text}{suffix}".strip()
+
+
 _HANDLERS = {
     "list_dir": _list_dir,
     "read_file": _read_file,
@@ -375,11 +573,16 @@ _HANDLERS = {
     "replace_in_file": _replace_in_file,
     "search_text": _search_text,
     "search_code": _search_code,
+    "find_files": _find_files,
+    "batch_files": _batch_files,
+    "http_request": _http_request,
     "save_memory": _save_memory,
     "run_command": _run_command,
 }
 
-_DANGEROUS = {"write_file", "replace_in_file", "run_command"} | GUI_NAMES
+_DANGEROUS = {
+    "write_file", "replace_in_file", "run_command", "batch_files", "http_request",
+} | GUI_NAMES
 # 只读的桌面动作不需要逐次确认，否则电脑模式几乎无法使用
 READ_ONLY_GUI = {"screen_capture", "window_list"}
 
@@ -387,6 +590,14 @@ READ_ONLY_GUI = {"screen_capture", "window_list"}
 def _approval_detail(name: str, args: dict) -> str:
     if name == "run_command":
         return f"命令：{args.get('command')}\n目录：{args.get('cwd') or '.'}"
+    if name == "batch_files":
+        return (
+            f"操作：{args.get('action')}\n"
+            f"数量：{len(args.get('paths') or [])}\n"
+            f"目标：{args.get('destination') or '（无）'}"
+        )
+    if name == "http_request":
+        return f"请求：{str(args.get('method') or 'GET').upper()} {args.get('url')}"
     if name == "write_file":
         content = args.get("content") or ""
         preview = content[:600] + ("..." if len(content) > 600 else "")
@@ -428,6 +639,8 @@ def preview_action(name: str, args: dict, workspace: Path) -> dict:
             "command": args.get("command") or "",
             "cwd": args.get("cwd") or ".",
         }
+    if name in ("batch_files", "http_request"):
+        return {"kind": "other", "detail": _approval_detail(name, args)}
     detail = json.dumps(args, ensure_ascii=False)[:600]
     return {"kind": "other", "detail": f"{name}\n{detail}"}
 

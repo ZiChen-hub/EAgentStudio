@@ -282,6 +282,17 @@
       click($("closeSettings"));
     });
 
+    await check("模型预设可以填充表单", () => {
+      click($("openSettings"));
+      document.querySelector('.sn-item[data-pane="models"]').click();
+      click($("addModel"));
+      setValue($("modelPreset"), "deepseek");
+      assert($("modelFormBase").value.includes("api.deepseek.com"), "Base URL 未填充");
+      assert($("modelFormModel").value === "deepseek-chat", "模型名未填充");
+      click($("modelFormCancel"));
+      click($("closeSettings"));
+    });
+
     await check("模型菜单可以打开并关闭", async () => {
       click($("modelChip"));
       assert(isVisible($("modelMenu")), "模型菜单没有打开");

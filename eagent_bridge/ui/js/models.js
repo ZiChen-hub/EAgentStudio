@@ -100,6 +100,40 @@ function renderActiveModels() {
 
 let editingModelId = null;
 
+const MODEL_PRESETS = {
+  deepseek: {
+    name: "DeepSeek API", type: "openai",
+    baseUrl: "https://api.deepseek.com/v1", modelName: "deepseek-chat",
+  },
+  openrouter: {
+    name: "OpenRouter", type: "openai",
+    baseUrl: "https://openrouter.ai/api/v1", modelName: "deepseek/deepseek-chat",
+  },
+  gemini: {
+    name: "Gemini", type: "openai",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    modelName: "gemini-2.0-flash",
+  },
+  groq: {
+    name: "Groq", type: "openai",
+    baseUrl: "https://api.groq.com/openai/v1", modelName: "llama-3.3-70b-versatile",
+  },
+  ollama: {
+    name: "本地 Ollama", type: "ollama",
+    baseUrl: "http://127.0.0.1:11434/v1", modelName: "llama3",
+  },
+};
+
+function applyModelPreset() {
+  const preset = MODEL_PRESETS[$("modelPreset").value];
+  if (!preset) return;
+  $("modelFormName").value = preset.name;
+  $("modelFormType").value = preset.type;
+  $("modelFormBase").value = preset.baseUrl;
+  $("modelFormModel").value = preset.modelName;
+  updateModelFormVisibility();
+}
+
 function updateModelFormVisibility() {
   const type = $("modelFormType").value;
   document.querySelectorAll("#modelEditor .row[data-type]").forEach((row) => {
@@ -115,6 +149,7 @@ function openModelEditor(id) {
   editingModelId = id || null;
   const model = id ? settings.models.find((item) => item.id === id) : null;
   $("modelEditorTitle").textContent = model ? "编辑模型" : "添加模型";
+  $("modelPreset").value = "";
   $("modelFormName").value = model ? model.name : "";
   $("modelFormType").value = model ? model.type : "web";
   $("modelFormSite").value = model && model.site ? model.site : "deepseek";
@@ -159,6 +194,7 @@ function deleteModel(id) {
 }
 
 $("addModel").addEventListener("click", () => openModelEditor(null));
+$("modelPreset").addEventListener("change", applyModelPreset);
 $("checkModel").addEventListener("click", async () => {
   const button = $("checkModel");
   if (button.disabled) return;

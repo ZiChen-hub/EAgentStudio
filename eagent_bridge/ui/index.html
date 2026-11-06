@@ -338,6 +338,17 @@
   <div id="modelEditor" class="overlay hidden">
     <div class="sheet">
       <div class="sheet-title" id="modelEditorTitle">添加模型</div>
+      <div class="row">
+        <label>预设</label>
+        <select id="modelPreset">
+          <option value="">自定义</option>
+          <option value="deepseek">DeepSeek API</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="gemini">Gemini（OpenAI 兼容）</option>
+          <option value="groq">Groq</option>
+          <option value="ollama">本地 Ollama</option>
+        </select>
+      </div>
       <div class="row"><label>名称</label><input id="modelFormName" type="text" spellcheck="false"></div>
       <div class="row">
         <label>类型</label>

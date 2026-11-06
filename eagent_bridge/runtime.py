@@ -57,7 +57,7 @@ BUILTIN_TOOL_NAMES = {spec["name"] for spec in tool_specs()} - {"finish"}
 
 CODE_TOOLS = {
     "list_dir", "read_file", "write_file", "replace_in_file", "search_text", "search_code",
-    "save_memory", "run_command",
+    "find_files", "batch_files", "http_request", "save_memory", "run_command",
 }
 COMPUTER_TOOLS = {
     "screen_capture", "mouse_move", "mouse_click", "mouse_drag",
