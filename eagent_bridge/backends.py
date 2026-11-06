@@ -162,14 +162,41 @@ class OpenAICompatBackend(ChatBackend):
             raise BackendError(f"模型接口返回格式异常: {str(data)[:300]}") from error
 
         self.messages.append({"role": "assistant", "content": content})
+        # 图片只在本轮请求里发送，之后换成占位文本，避免后续每轮重复上传 base64
+        self._strip_images()
         self._trim()
         return content
 
+    @staticmethod
+    def _content_size(content) -> int:
+        if isinstance(content, list):
+            total = 0
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                total += len(str(part.get("text") or ""))
+                image = part.get("image_url") or {}
+                total += len(str(image.get("url") or ""))
+            return total
+        return len(str(content or ""))
+
+    def _strip_images(self) -> None:
+        for message in self.messages:
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            texts = [str(part.get("text") or "") for part in content if part.get("type") == "text"]
+            images = sum(1 for part in content if part.get("type") == "image_url")
+            text = "\n".join(item for item in texts if item)
+            if images:
+                text = (text + "\n" if text else "") + f"（{images} 张图片已省略）"
+            message["content"] = text
+
     def _trim(self) -> None:
-        total = sum(len(message.get("content") or "") for message in self.messages)
+        total = sum(self._content_size(message.get("content")) for message in self.messages)
         while total > MAX_HISTORY_CHARS and len(self.messages) > 3:
             removed = self.messages.pop(1)
-            total -= len(removed.get("content") or "")
+            total -= self._content_size(removed.get("content"))
 
     def compact(self, summary: str) -> None:
         system = self.messages[0] if self.messages else {"role": "system", "content": ""}

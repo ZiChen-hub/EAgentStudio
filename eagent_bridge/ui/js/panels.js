@@ -212,9 +212,12 @@ async function loadSnapshots() {
 async function restoreSnapshot(item) {
   const list = (item.files || []).slice(0, 8).join("\n");
   const more = item.count > 8 ? "\n… 共 " + item.count + " 个文件" : "";
+  const warning = item.skipped
+    ? "\n\n注意：" + item.skipped + " 个文件超过 5MB，当时未备份，无法回滚。"
+    : "";
   if (!(await dialog({
     title: "回滚这次改动",
-    message: "将把这些文件恢复到任务开始前：\n" + list + more + "\n\n当前内容会被覆盖。",
+    message: "将把这些文件恢复到任务开始前：\n" + list + more + warning + "\n\n当前内容会被覆盖。",
   }))) return;
   try {
     const data = await api("/api/snapshots/restore", {
@@ -223,6 +226,9 @@ async function restoreSnapshot(item) {
       body: JSON.stringify({ id: item.id }),
     });
     logMessage("status", "已回滚 " + data.restored.length + " 个文件，删除 " + data.removed.length + " 个新建文件");
+    if (data.skipped && data.skipped.length) {
+      logMessage("error", "有 " + data.skipped.length + " 个文件因过大未备份，未能回滚：" + data.skipped.join("、"));
+    }
     await loadSnapshots();
     await refreshTree();
     for (const path of data.restored) reloadIfOpen(path);

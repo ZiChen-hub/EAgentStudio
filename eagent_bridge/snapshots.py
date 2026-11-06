@@ -170,6 +170,7 @@ def list_snapshots(workspace: Path) -> list[dict]:
                 "finished": data.get("finished"),
                 "restored": data.get("restored"),
                 "count": len(files),
+                "skipped": sum(1 for item in files if item.get("skipped")),
                 "files": [str(item.get("path")) for item in files][:50],
             }
         )
@@ -200,6 +201,7 @@ def restore(workspace: Path, run_id: str) -> dict:
     restored: list[str] = []
     removed: list[str] = []
     missing: list[str] = []
+    skipped: list[str] = []
     for item in reversed(files):
         key = str(item.get("path") or "")
         if not key:
@@ -207,6 +209,9 @@ def restore(workspace: Path, run_id: str) -> dict:
         target = _safe_target(workspace, key)
         if target is None:
             missing.append(key)
+            continue
+        if item.get("skipped"):
+            skipped.append(key)
             continue
         if item.get("existed"):
             source = _safe_target(_dir(workspace, run_id) / "files", key)
@@ -232,4 +237,4 @@ def restore(workspace: Path, run_id: str) -> dict:
         _write_manifest(workspace, run_id, data)
     except OSError:
         pass
-    return {"restored": restored, "removed": removed, "missing": missing}
+    return {"restored": restored, "removed": removed, "missing": missing, "skipped": skipped}

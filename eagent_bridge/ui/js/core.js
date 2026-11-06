@@ -261,7 +261,7 @@ function showEmpty(box, text, className = "results-empty") {
 }
 
 function logMessage(kind, text) {
-  if (kind === "status" || kind === "tool") return;
+  if (kind === "tool") return;
   const content = String(text == null ? "" : text);
   const div = document.createElement("div");
   div.className = "msg " + kind;
@@ -273,25 +273,28 @@ function logMessage(kind, text) {
     div.appendChild(image);
   } else {
     div.appendChild(document.createTextNode(content));
-    const copy = document.createElement("button");
-    copy.type = "button";
-    copy.className = "msg-copy";
-    copy.textContent = "复制";
-    copy.title = "复制内容";
-    copy.addEventListener("click", (event) => {
-      event.stopPropagation();
-      copyText(content);
-      copy.textContent = "已复制";
-      setTimeout(() => { copy.textContent = "复制"; }, 1200);
-    });
-    div.appendChild(copy);
+    if (kind !== "status") {
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "msg-copy";
+      copy.textContent = "复制";
+      copy.title = "复制内容";
+      copy.addEventListener("click", (event) => {
+        event.stopPropagation();
+        copyText(content);
+        copy.textContent = "已复制";
+        setTimeout(() => { copy.textContent = "复制"; }, 1200);
+      });
+      div.appendChild(copy);
+    }
   }
   messages.appendChild(div);
   while (messages.children.length > 500) {
     messages.removeChild(messages.firstChild);
   }
   messages.scrollTop = messages.scrollHeight;
-  recordChatMessage(kind, content);
+  // 状态提示只在本次界面里显示，不写进历史，避免刷新后满屏都是操作回执
+  if (kind !== "status") recordChatMessage(kind, content);
 }
 
 function languageOf(path) {

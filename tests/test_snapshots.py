@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ from eagent_bridge.snapshots import (  # noqa: E402
     backup,
     begin,
     list_snapshots,
+    restore,
 )
 
 
@@ -46,6 +48,28 @@ class SnapshotTests(unittest.TestCase):
             bad.mkdir(parents=True)
             (bad / "snapshot.json").write_text("{}", encoding="utf-8")
             self.assertEqual(list_snapshots(workspace), [])
+
+    def test_restore_reports_skipped_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder) / "work"
+            snapshot_dir = workspace / ".eagent" / "backups" / "run2"
+            snapshot_dir.mkdir(parents=True)
+            manifest = {
+                "id": "run2",
+                "task": "x",
+                "created": 0,
+                "finished": 0,
+                "summary": "",
+                "files": [{"path": "big.bin", "existed": True, "skipped": True}],
+            }
+            (snapshot_dir / "snapshot.json").write_text(
+                json.dumps(manifest), encoding="utf-8"
+            )
+
+            result = restore(workspace, "run2")
+
+            self.assertEqual(result["skipped"], ["big.bin"])
+            self.assertEqual(result["restored"], [])
 
 
 class CookieDomainTests(unittest.TestCase):

@@ -234,7 +234,10 @@ class AgentRuntime:
                 except Exception:
                     pass
             self._clients = []
-            self.backend.close()
+            try:
+                self.backend.close()
+            except Exception:
+                pass
 
     # ---- 内部 ----
 
