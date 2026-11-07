@@ -29,6 +29,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="EAgentStudio",
+    icon=str(ROOT / "eagent_bridge" / "ui" / "favicon.ico"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="eagent-token" content="__EAGENT_TOKEN__">
 <title>EAgent Studio</title>
+<link rel="icon" type="image/svg+xml" href="/ui/logo.svg">
+<link rel="icon" type="image/x-icon" href="/ui/favicon.ico">
 <link rel="stylesheet" href="/ui/styles.css">
 </head>
 <body>
   <div class="topbar">
-    <div class="brand">EAgent <span>Studio</span></div>
+    <div class="brand"><img class="brand-logo" src="/ui/logo.svg" alt="">EAgent <span>Studio</span></div>
     <input id="workspace" type="text" spellcheck="false" readonly title="点击切换工作目录">
     <div class="grow"></div>
     <button id="openSettings">设置</button>
@@ -88,7 +90,7 @@
         <div id="editor"></div>
         <div id="diff"></div>
         <div id="welcome" class="welcome">
-          <div class="welcome-logo">E</div>
+          <img class="welcome-logo" src="/ui/logo.svg" alt="EAgent Studio">
           <div class="welcome-title">EAgent Studio</div>
         </div>
       </div>
@@ -300,7 +302,7 @@
 
         <div class="settings-pane hidden" data-pane="about">
           <div class="about">
-            <div class="welcome-logo big">E</div>
+            <img class="welcome-logo big" src="/ui/logo.svg" alt="EAgent Studio">
             <div class="about-title">EAgent Studio</div>
             <div class="about-text">
               把网页版 AI 变成能动手的编码 Agent：自主读代码、改文件、跑命令，
@@ -323,7 +325,7 @@
     <div class="onboard-card">
       <div class="onboard-step-index" id="onboardIndex">1 / 4</div>
       <div class="onboard-brand">
-        <div class="welcome-logo">E</div>
+        <img class="welcome-logo" src="/ui/logo.svg" alt="EAgent Studio">
         <div class="onboard-brand-name">EAgent Studio</div>
       </div>
       <div class="onboard-title" id="onboardTitle">欢迎使用</div>

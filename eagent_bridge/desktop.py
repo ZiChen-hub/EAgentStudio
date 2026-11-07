@@ -11,7 +11,7 @@ import os
 import sys
 import threading
 
-from .http_api import DEFAULT_PORT, create_app_server, default_workspace
+from .http_api import DEFAULT_PORT, UI_DIR, create_app_server, default_workspace
 
 try:
     import webview
@@ -90,7 +90,10 @@ def main() -> None:
     )
     bridge._window = window
     try:
-        webview.start(debug=bool(os.environ.get("EAGENT_BRIDGE_DEBUG")))
+        webview.start(
+            debug=bool(os.environ.get("EAGENT_BRIDGE_DEBUG")),
+            icon=str(UI_DIR / "favicon.ico"),
+        )
     finally:
         server.shutdown()
         server.server_close()

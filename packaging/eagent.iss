@@ -11,6 +11,7 @@ AppId={{8F5B2F0C-6A0E-4E6B-9F3B-2C7D1A5E9B41}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
+SetupIconFile=..\eagent_bridge\ui\favicon.ico
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
